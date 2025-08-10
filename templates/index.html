@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de Escritorio</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+
+</head>
+<body>
+    <div class="container">
+        <h1>Inventario de Escritorio VTI</h1>
+        <hr>
+        <div class="barra-superior">
+            <div>
+                <label>Fecha de consulta:</label>
+                <input type="date">
+                <button class="btn gris">Consultar Historial</button>
+            <div/>
+        </div>
+        <hr>
+        <form method="POST" enctype="multipart/form-data">
+            <div class="carga-archivos">
+                <input type="file" name="files[]" multiple required>
+                <button class="btn azul" type="submit">Subir</button>
+                <button class="btn morado" type="button">Integrar</button>
+                <button class="btn verde" type="button">Exportar a Excel</button>
+                <button class="btn rojo" type="button">Exportar a PDF</button>
+            </div>
+        </form>
+        <hr>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+                <hr>
+            <tbody>
+                {% for archivo in archivos %}
+                <tr>
+                    <td>{{ archivo.nombre }}</td>
+                    <td>{{ archivo.fecha }}</td>
+                    <td>{{ archivo.tipo }}</td>
+                    <td>{{ '✔️' if archivo.cargado else '❌' }}</td>
+                    <td><a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" class="btn amarillo">Eliminar</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5">No hay archivos cargados.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
