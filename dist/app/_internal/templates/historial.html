@@ -1,0 +1,41 @@
+<!-- templates/historial.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Historial - Inventario</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Historial de acciones</h1>
+    <a href="{{ url_for('index') }}" class="btn gris">Volver</a>
+    <table>
+      <thead>
+        <tr>
+          <th>Acción</th>
+          <th>Archivo / Detalle</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in history %}
+          <tr>
+            <td>{{ item.accion }}</td>
+            <td>
+              {%- if item.archivo -%}
+                {{ item.archivo }}
+              {%- else -%}
+                {{ item | tojson }}
+              {%- endif -%}
+            </td>
+            <td>{{ item.timestamp }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3">No hay historial.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

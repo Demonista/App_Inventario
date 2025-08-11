@@ -1,60 +1,93 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventario de Escritorio</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
-
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Inventario de Escritorio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+  <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Inventario de Escritorio VTI</h1>
-        <hr>
-        <div class="barra-superior">
-            <div>
-                <label>Fecha de consulta:</label>
-                <input type="date">
-                <button class="btn gris">Consultar Historial</button>
-            <div/>
-        </div>
-        <hr>
-        <form method="POST" enctype="multipart/form-data">
-            <div class="carga-archivos">
-                <input type="file" name="files[]" multiple required>
-                <button class="btn azul" type="submit">Subir</button>
-                <button class="btn morado" type="button">Integrar</button>
-                <button class="btn verde" type="button">Exportar a Excel</button>
-                <button class="btn rojo" type="button">Exportar a PDF</button>
-            </div>
-        </form>
-        <hr>
-        <table>
-            <thead>
-                <tr>
-                    <th>Nombre</th>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Estado</th>
-                    <th>Acción</th>
-                </tr>
-            </thead>
-                <hr>
-            <tbody>
-                {% for archivo in archivos %}
-                <tr>
-                    <td>{{ archivo.nombre }}</td>
-                    <td>{{ archivo.fecha }}</td>
-                    <td>{{ archivo.tipo }}</td>
-                    <td>{{ '✔️' if archivo.cargado else '❌' }}</td>
-                    <td><a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" class="btn amarillo">Eliminar</a></td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5">No hay archivos cargados.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+  <div class="container">
+    <h1>Inventario de Escritorio VTI</h1>
+    <nav class="top-nav">
+      <a href="{{ url_for('historial') }}" class="btn gris">Historial</a>
+      <a href="{{ url_for('configuracion') }}" class="btn gris">Configuración</a>
+      <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
+    </nav>
+
+    <section class="uploader">
+      <h2>Subir archivos (Insumos)</h2>
+      <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="files[]" multiple required>
+        <button class="btn azul" type="submit">Subir</button>
+      </form>
+    </section>
+
+    <section class="integracion">
+      <h2>Integrar archivo al Maestro</h2>
+      <form action="{{ url_for('integrar') }}" method="POST" class="form-integrar">
+        <label for="filename">Archivo (subido):</label>
+        <select name="filename" required>
+          {% for a in archivos %}
+            <option value="{{ a.nombre }}">{{ a.nombre }} — {{ a.fecha }} — {{ a.tipo }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="tipo_insumo">Tipo de Insumo:</label>
+        <select name="tipo_insumo" required>
+          <option value="endpoint">Endpoint (Antivirus)</option>
+          <option value="personnel">Personal (ESTADO_GEN_USUARIO)</option>
+          <option value="tmp">tmp... (Useraranda_BLOGIK)</option>
+          <option value="da">DA... (Reporte DA)</option>
+        </select>
+
+        <label for="keep_rows">Filas a preservar (keep_rows):</label>
+        <input type="number" name="keep_rows" value="2" min="1" max="10">
+
+        <button class="btn morado" type="submit">Integrar archivo seleccionado</button>
+      </form>
+    </section>
+
+    <section class="exports">
+      <h2>Exportar</h2>
+      <button class="btn verde" onclick="exportarExcel()">Exportar a Excel</button>
+      <button class="btn rojo" onclick="exportarPDF()">Exportar a PDF</button>
+    </section>
+
+    <hr>
+
+    <section class="listado">
+      <h2>Archivos subidos</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for archivo in archivos %}
+          <tr>
+            <td>{{ archivo.nombre }}</td>
+            <td>{{ archivo.fecha }}</td>
+            <td>{{ archivo.tipo }}</td>
+            <td>{{ '✔️' if archivo.cargado else '❌' }}</td>
+            <td>
+              <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" class="btn amarillo">Eliminar</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5">No hay archivos cargados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
 </body>
 </html>
