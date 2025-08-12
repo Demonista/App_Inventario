@@ -1,0 +1,99 @@
+[
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_002157.xlsx",
+    "timestamp": "2025-08-11T00:25:08.487498"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_002354.xlsx",
+    "timestamp": "2025-08-11T00:25:03.251723"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "tmp",
+    "archivo": "tmpArandira.xlsx",
+    "timestamp": "2025-08-11T00:23:54.313396"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "endpoint",
+    "archivo": "tmpArandira.xlsx",
+    "timestamp": "2025-08-11T00:21:57.718191"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_002048.xlsx",
+    "timestamp": "2025-08-11T00:21:46.618017"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_002124.xlsx",
+    "timestamp": "2025-08-11T00:21:34.874212"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "endpoint",
+    "archivo": "tmpArandira.xlsx",
+    "timestamp": "2025-08-11T00:21:24.230916"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "tmp",
+    "archivo": "tmpArandira.xlsx",
+    "timestamp": "2025-08-11T00:20:48.489324"
+  },
+  {
+    "accion": "upload",
+    "archivo": "tmpArandira.xlsx",
+    "timestamp": "2025-08-11T00:20:32.445430"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_001834.xlsx",
+    "timestamp": "2025-08-11T00:20:09.210489"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_001838.xlsx",
+    "timestamp": "2025-08-11T00:20:05.462671"
+  },
+  {
+    "accion": "delete",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_001847.xlsx",
+    "timestamp": "2025-08-11T00:20:01.009815"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "endpoint",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_001838.xlsx",
+    "timestamp": "2025-08-11T00:18:47.371718"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "endpoint",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba_backup_20250811_001834.xlsx",
+    "timestamp": "2025-08-11T00:18:38.846392"
+  },
+  {
+    "accion": "integrar",
+    "tipo": "endpoint",
+    "archivo": "Oct09Reporte-Data_Inventariodeprueba.xlsx",
+    "timestamp": "2025-08-11T00:18:34.904260"
+  },
+  {
+    "accion": "delete",
+    "archivo": "JOSE_CARRASCO_informe_Punto_1_Noviembre_12_al_18_de_2012.xlsx",
+    "timestamp": "2025-08-11T00:18:26.327011"
+  },
+  {
+    "accion": "delete",
+    "archivo": "JOSE_CARRASCO_informe_Punto_1_Noviembre_19_al_25_de_2012.xlsx",
+    "timestamp": "2025-08-11T00:18:23.106777"
+  },
+  {
+    "accion": "delete",
+    "archivo": "JOSE_CARRASCO_informe_Punto_1_Noviembre_26_a_Dic.02_de_2012.xlsx",
+    "timestamp": "2025-08-11T00:18:18.464104"
+  }
+]

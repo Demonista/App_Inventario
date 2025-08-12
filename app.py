@@ -364,4 +364,6 @@ def detectar_tipo_insumo(nombre):
 if __name__ == "__main__":
     # abrir navegador 1s después (opcional)
     threading.Timer(1.0, abrir_navegador).start()
-    app.run(debug=False)
+    app.run(debug=True)
+    
+

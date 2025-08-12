@@ -13,11 +13,16 @@
   <div class="container">
     <h1>Inventario de Escritorio VTI</h1>
     <nav class="top-nav">
+      <div>
+         <label>Fecha de consulta:</label>
+                <input type="date">
+                <button class="btn azul">Consultar</button>
+      </div>
       <a href="{{ url_for('historial') }}" class="btn gris">Historial</a>
       <a href="{{ url_for('configuracion') }}" class="btn gris">Configuración</a>
       <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
     </nav>
-
+    <hr>
     <section class="uploader">
       <h2>Subir archivos (Insumos)</h2>
       <form method="POST" enctype="multipart/form-data">
@@ -39,9 +44,9 @@
         <label for="tipo_insumo">Tipo de Insumo:</label>
         <select name="tipo_insumo" required>
           <option value="endpoint">Endpoint (Antivirus)</option>
-          <option value="personnel">Personal (ESTADO_GEN_USUARIO)</option>
-          <option value="tmp">tmp... (Useraranda_BLOGIK)</option>
-          <option value="da">DA... (Reporte DA)</option>
+          <option value="personal">Personal (ESTADO_GEN_USUARIO)</option>
+          <option value="tmp">tmp (Useraranda_BLOGIK)</option>
+          <option value="da">DA (Reporte DA)</option>
         </select>
 
         <label for="keep_rows">Filas a preservar (keep_rows):</label>

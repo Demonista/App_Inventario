@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Inventario de Escritorio</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}?v=2">
   <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
 </head>
 <body>
@@ -39,9 +39,9 @@
         <label for="tipo_insumo">Tipo de Insumo:</label>
         <select name="tipo_insumo" required>
           <option value="endpoint">Endpoint (Antivirus)</option>
-          <option value="personnel">Personal (ESTADO_GEN_USUARIO)</option>
-          <option value="tmp">tmp... (Useraranda_BLOGIK)</option>
-          <option value="da">DA... (Reporte DA)</option>
+          <option value="personal">Personal (ESTADO_GEN_USUARIO)</option>
+          <option value="tmp">tmp (Useraranda_BLOGIK)</option>
+          <option value="da">DA (Reporte DA)</option>
         </select>
 
         <label for="keep_rows">Filas a preservar (keep_rows):</label>
