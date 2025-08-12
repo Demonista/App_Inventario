@@ -2,40 +2,70 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <title>Historial - Inventario</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Archivos</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
-<body>
-  <div class="container">
-    <h1>Historial de acciones</h1>
-    <a href="{{ url_for('index') }}" class="btn gris">Volver</a>
-    <table>
-      <thead>
-        <tr>
-          <th>Acción</th>
-          <th>Archivo / Detalle</th>
-          <th>Timestamp</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in history %}
-          <tr>
-            <td>{{ item.accion }}</td>
-            <td>
-              {%- if item.archivo -%}
-                {{ item.archivo }}
-              {%- else -%}
-                {{ item | tojson }}
-              {%- endif -%}
-            </td>
-            <td>{{ item.timestamp }}</td>
-          </tr>
+<body class="bg-light">
+
+    <div class="container py-5">
+        <h1 class="mb-4 text-center">📂 Historial de Archivos</h1>
+        <div class="d-flex justify-content-center mt-4">
+    <nav>
+        <ul class="pagination">
+            {% if page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('historial', page=page-1) }}">Anterior</a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+            {% endif %}
+
+            {% for p in range(1, total_pages + 1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('historial', page=p) }}">{{ p }}</a>
+                </li>
+            {% endfor %}
+
+            {% if page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('historial', page=page+1) }}">Siguiente</a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    </div>
+
+        {% if archivos %}
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nombre del archivo</th>
+                        <th>Fecha de modificación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for archivo in archivos %}
+                        <tr>
+                            <td>{{ archivo.nombre }}</td>
+                            <td>{{ archivo.fecha }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-          <tr><td colspan="3">No hay historial.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+            <div class="alert alert-warning text-center">
+                No hay archivos en el historial.
+            </div>
+        {% endif %}
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">⬅ Volver al inicio</a>
+        </div>
+    </div>
+
 </body>
 </html>

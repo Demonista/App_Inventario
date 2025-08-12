@@ -1,5 +1,16 @@
 // static/js/scripts.js
 // Funciones para exportar archivos (llaman a las rutas Flask)
+
+function irAlHistorial() {
+  const fecha = document.getElementById('fecha_consulta').value;
+  let url = '/historial';
+  if (fecha) {
+    url += '?fecha=' + encodeURIComponent(fecha);
+  }
+  window.location.href = url;
+}
+
+
 function exportarExcel() {
   fetch('/exportar-excel')
     .then(response => {

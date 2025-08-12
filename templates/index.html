@@ -10,14 +10,20 @@
   <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
 </head>
 <body>
-  <div class="container">
+  
     <h1>Inventario de Escritorio VTI</h1>
+
+    <div class="container">
     <nav class="top-nav">
-      <a href="{{ url_for('historial') }}" class="btn gris">Historial</a>
-      <a href="{{ url_for('configuracion') }}" class="btn gris">Configuración</a>
-      <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
+        <label for="fecha_consulta">Fecha de consulta:</label>
+        <input type="date" id="fecha_consulta" name="fecha">
+
+        <a href="#" class="btn azul" onclick="irAlHistorial()">Historial</a>
+        <a href="{{ url_for('configuracion') }}" class="btn morado">Configuración</a>
+        <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
     </nav>
 
+    <div>
     <section class="uploader">
       <h2>Subir archivos (Insumos)</h2>
       <form method="POST" enctype="multipart/form-data">
@@ -25,7 +31,9 @@
         <button class="btn azul" type="submit">Subir</button>
       </form>
     </section>
+    </div>
 
+    <div>
     <section class="integracion">
       <h2>Integrar archivo al Maestro</h2>
       <form action="{{ url_for('integrar') }}" method="POST" class="form-integrar">
@@ -50,14 +58,16 @@
         <button class="btn morado" type="submit">Integrar archivo seleccionado</button>
       </form>
     </section>
-
+    </div>
+    
+    <div>
     <section class="exports">
       <h2>Exportar</h2>
       <button class="btn verde" onclick="exportarExcel()">Exportar a Excel</button>
       <button class="btn rojo" onclick="exportarPDF()">Exportar a PDF</button>
     </section>
-
-    <hr>
+    </div>
+    
 
     <section class="listado">
       <h2>Archivos subidos</h2>
