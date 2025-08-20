@@ -1,256 +1,285 @@
-# xlsx_utils.py
-# Requisitos: pandas, openpyxl
-# pip install pandas openpyxl
+"""xlsx_utils.py
+
+Utilidades para integrar insumos al Libro Maestro (Insumo 1: "Inventario de proveedor").
+
+Puntos clave:
+- Cada insumo SOLO actualiza una hoja específica del maestro.
+- Se debe preservar la fila de encabezados y las fórmulas.
+- Estrategia recomendada: usar la fila 2 como "fila plantilla" de fórmulas.
+  - Se copian sus fórmulas hacia todas las filas nuevas generadas.
+  - Se pueden conservar las dos primeras filas (encabezado + plantilla) mediante el
+    parámetro keep_rows=2. Si se pasa keep_rows=1, se eliminará la fila plantilla.
+- Para Excel, las fórmulas se recalculan al abrir el archivo (data_only=False en openpyxl).
+
+Este módulo implementa:
+- backup_file(): resguarda el maestro antes de escribir.
+- integrate_endpoint_to_antivirus(): integra Insumo 2 (Endpoint/Antivirus) en hoja "Antivirus".
+- replace_sheet_with_df(): utilidad genérica (no usada directamente en Antivirus, pero disponible).
+
+Requisitos:
+- openpyxl
+- pandas
+
+"""
+from __future__ import annotations
 
 import os
 import re
 import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+import unicodedata
+
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.utils import get_column_letter
 
-def _normalize(name):
-    """Normaliza nombres para comparar (quita espacios extra, minúsculas)."""
-    if name is None:
-        return ''
-    return re.sub(r'\s+', ' ', str(name).strip()).lower()
 
-def _find_sheet(wb, target):
-    """Busca hoja por nombre (case-insensitive). Devuelve Worksheet o None."""
-    for n in wb.sheetnames:
-        if _normalize(n) == _normalize(target):
-            return wb[n]
-    return None
+# =============================== Utilidades base ===============================
 
-def _find_header_row(ws, expected_names, max_scan=6):
+def backup_file(path: str) -> str:
+    """Crea un respaldo del archivo Excel en el mismo directorio con timestamp.
+    Devuelve la ruta del backup creado.
     """
-    Intenta ubicar la fila de encabezados buscando coincidencias entre expected_names
-    en las primeras max_scan filas. Devuelve número de fila (1-based). Por defecto 1.
+    src = Path(path)
+    if not src.exists():
+        raise FileNotFoundError(f"No existe el archivo para backup: {path}")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst = src.with_name(f"{src.stem}.backup_{ts}{src.suffix}")
+    shutil.copy2(str(src), str(dst))
+    return str(dst)
+
+
+def _norm_text(s: str) -> str:
+    """Normaliza texto para comparaciones: minúsculas, sin acentos, espacios compactados."""
+    if s is None:
+        return ""
+    s = str(s).strip().lower()
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')  # remove accents
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def _build_header_map(ws: Worksheet, header_row: int = 1) -> Dict[str, int]:
+    """Crea un mapa header_normalizado -> índice de columna (1-based) leyendo una fila.
+    Si una celda está vacía, se ignora.
     """
-    exp = {_normalize(x) for x in expected_names}
-    best_row = 1
-    best_score = 0
-    for r in range(1, max_scan+1):
-        row_vals = [_normalize(ws.cell(row=r, column=c).value) for c in range(1, ws.max_column+1)]
-        score = sum(1 for v in row_vals if v in exp)
-        if score > best_score:
-            best_score = score
-            best_row = r
-        if score >= max(1, len(exp)//2):
-            return r
-    return best_row
+    headers: Dict[str, int] = {}
+    for col in range(1, ws.max_column + 1):
+        val = ws.cell(row=header_row, column=col).value
+        key = _norm_text(val)
+        if key:
+            headers[key] = col
+    return headers
 
-def _map_master_headers(ws, header_row):
-    """Mapea encabezados del maestro a (normalized_name -> columna_index)."""
-    mapping = {}
-    for c in range(1, ws.max_column+1):
-        val = ws.cell(row=header_row, column=c).value
-        if val is None:
-            continue
-        mapping[_normalize(val)] = c
-    return mapping
 
-def backup_file(path):
-    """Crea una copia de seguridad timestamped del archivo dado y devuelve la ruta."""
-    dirn, base = os.path.split(path)
-    name, ext = os.path.splitext(base)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    target = os.path.join(dirn, f"{name}_backup_{stamp}{ext}")
-    shutil.copy2(path, target)
-    return target
-
-def _ensure_df_cols_normalized(df):
-    """normaliza columnas del DataFrame (lower & stripped) devolviendo mapping original->normalized"""
-    df = df.copy()
-    orig_cols = list(df.columns)
-    norm_cols = [_normalize(c) for c in orig_cols]
-    df.columns = norm_cols
-    return df, dict(zip(norm_cols, orig_cols))
-
-# ---------------------------
-# Función genérica: reemplazar contenido de una hoja (preservando keep_rows)
-# ---------------------------
-def replace_sheet_with_df(master_path, sheet_name, df, keep_rows=2, save_as=None, make_backup=True):
+def _delete_data_rows(ws: Worksheet, keep_rows: int = 2) -> None:
+    """Elimina todas las filas de datos preservando las primeras `keep_rows` filas.
+    - Por defecto conservamos 2 filas: fila 1 (encabezados) y fila 2 (plantilla de fórmulas).
+    - Si `keep_rows` == 1, se conserva solo la fila 1 (encabezados).
     """
-    Reemplaza el contenido de la hoja 'sheet_name' del libro maestro con el DataFrame df.
-    - keep_rows: número de filas superiores a preservar (encabezados/formulas).
-    - make_backup: si True hace copia de seguridad del master antes de guardar.
-    - save_as: ruta destino, si None sobrescribe master_path.
-    Retorna resumen dict.
+    max_r = ws.max_row
+    if max_r > keep_rows:
+        ws.delete_rows(keep_rows + 1, max_r - keep_rows)
+
+
+def _copy_formula_row(ws: Worksheet, from_row: int, to_row_start: int, to_row_end: int) -> None:
+    """Copia las fórmulas de `from_row` a cada fila en [to_row_start, to_row_end].
+    - Solo copia celdas que tengan fórmula (string que comienza con '=')
+    - Las referencias relativas se ajustan automáticamente cuando Excel recalcule.
     """
-    if not os.path.exists(master_path):
-        raise FileNotFoundError(master_path)
-    # backup
-    backup = None
-    if make_backup:
-        backup = backup_file(master_path)
+    if to_row_end < to_row_start:
+        return
+    for col in range(1, ws.max_column + 1):
+        tmpl_val = ws.cell(row=from_row, column=col).value
+        if isinstance(tmpl_val, str) and tmpl_val.startswith('='):
+            for r in range(to_row_start, to_row_end + 1):
+                ws.cell(row=r, column=col).value = tmpl_val
 
-    wb = load_workbook(master_path)
-    ws = _find_sheet(wb, sheet_name)
-    if ws is None:
-        raise ValueError(f"Hoja '{sheet_name}' no encontrada en {master_path}")
 
-    # encontrar header row (intentar fila 1..keep_rows)
-    header_row = _find_header_row(ws, df.columns.tolist(), max_scan=keep_rows+2)
+def _set_cell(ws: Worksheet, row: int, col: int, value):
+    ws.cell(row=row, column=col, value=value)
 
-    # borrar contenido debajo de keep_rows (mantener header_row y filas superiores)
-    insert_row = max(keep_rows + 1, header_row + 1)
-    if ws.max_row >= insert_row:
-        ws.delete_rows(insert_row, ws.max_row - (insert_row-1))
 
-    # escribir df a partir de insert_row
-    # conservar orden de columnas del maestro si existieran; si no, escribir de 1..n
-    master_map = _map_master_headers(ws, header_row)
-    # Si maestro tiene encabezados que coinciden con df, usarlos; si no, solo escribir en columnas nuevas
-    # Construir lista de target column indices en orden de df.columns
-    target_cols = []
-    for col in df.columns:
-        norm = _normalize(col)
-        if norm in master_map:
-            target_cols.append(master_map[norm])
-        else:
-            # buscar primera columna vacía
-            target_cols.append(None)
+# =============================== Integración Antivirus ===============================
 
-    write_row = insert_row
-    for _, row in df.iterrows():
-        # si target_cols has None, append at the end of existing columns
-        if any(tc is None for tc in target_cols):
-            # append values starting at first empty column after ws.max_column
-            col_idx = ws.max_column + 1
-            for i, val in enumerate(row):
-                if target_cols[i] is None:
-                    ws.cell(row=write_row, column=col_idx).value = val
-                    col_idx += 1
-                else:
-                    ws.cell(row=write_row, column=target_cols[i]).value = val
-        else:
-            for i, val in enumerate(row):
-                ws.cell(row=write_row, column=target_cols[i]).value = val
-        write_row += 1
+def integrate_endpoint_to_antivirus(master_path: str, endpoint_path: str, keep_rows: int = 2) -> Dict:
+    """Integra el insumo Endpoint/Antivirus en la hoja "Antivirus" del maestro.
 
-    # forzar recálculo en abrir
-    try:
-        wb.calc_properties.fullCalcOnLoad = True
-    except Exception:
-        try:
-            wb.calculation_properties.fullCalcOnLoad = True
-        except Exception:
-            pass
+    Mapeo de columnas (Insumo 2 -> Hoja Antivirus):
+      - "Endpoint name"      -> "Nombre de equipo"
+      - "IP address"         -> "IP"
+      - "MAC address"        -> "Mac"
+      - "Last logged on user"-> "Last logged on user"
+      - "Last Startup"       -> "Last Startup"
+      - "Last Shutdown"      -> "Last Shutdown"
+      - "Protection Manager" -> "Protection Manager"
+      - "Agent Program"      -> "Agent Program"
 
-    out = save_as if save_as else master_path
-    wb.save(out)
-    return {"master": master_path, "sheet": sheet_name, "rows_written": len(df), "backup": backup, "saved_to": out}
+    Reglas adicionales:
+      - Columna "Estado":
+          * si Protection Manager contiene "standard endpoint" (case-insensitive, "similar"),
+            entonces "Antivirus Ins."; en caso contrario "NO REPORTA".
+      - Eliminar filas donde "Last logged on user" esté vacío (tras escribir datos).
+      - Preservar encabezados y fórmulas copiando la fila 2 (plantilla) hacia las nuevas filas.
 
-# ---------------------------
-# Insumo 2: Endpoint -> hoja "Antivirus"
-# ---------------------------
-def integrate_endpoint_to_antivirus(master_path, endpoint_path, keep_rows=2, save_as=None, make_backup=True):
+    Parámetros:
+      - keep_rows: 2 conserva encabezado+plantilla; 1 elimina la plantilla (solo encabezado).
+
+    Devuelve un dict con resumen: { 'rows_written': int, 'sheet': 'Antivirus' }
     """
-    Toma el Endpoint excel (endpoint_path) y actualiza la hoja 'Antivirus' en master_path.
-    Mapea columnas desde endpoint a las columnas del maestro según tus reglas.
-    """
-    if not os.path.exists(master_path):
-        raise FileNotFoundError(master_path)
-    if not os.path.exists(endpoint_path):
-        raise FileNotFoundError(endpoint_path)
+    sheet_name = "Antivirus"
 
-    # leer endpoint
-    df_raw = pd.read_excel(endpoint_path, engine='openpyxl')
-    df, orig_map = _ensure_df_cols_normalized(df_raw)
+    # 1) Cargar maestro y obtener hoja
+    wb = load_workbook(master_path, data_only=False, keep_vba=False)
+    if sheet_name not in wb.sheetnames:
+        raise ValueError(f"La hoja '{sheet_name}' no existe en el maestro.")
+    ws = wb[sheet_name]
 
-    # mapeo de columnas (normalized endpoint name -> normalized master column name)
-    mapping = {
-        'endpoint name': 'nombre de equipo',
-        'ip address': 'ip',
-        'mac address': 'mac',
-        'last logged on user': 'last logged on user',
-        'last startup': 'last startup',
-        'last shutdown': 'last shutdown',
-        'protection manager': 'protection manager',
-        'agent program': 'agent program'
+    # 2) Leer insumo Endpoint con pandas
+    df = pd.read_excel(endpoint_path)
+
+    # Normalizamos nombres de columnas de DF para búsqueda flexible
+    df_cols_norm = { _norm_text(c): c for c in df.columns }
+
+    def get_df_col(*candidates: str) -> Optional[str]:
+        """Encuentra en df.columns la primera coincidencia entre varios candidatos (normalizados)."""
+        for cand in candidates:
+            key = _norm_text(cand)
+            if key in df_cols_norm:
+                return df_cols_norm[key]
+        return None
+
+    # Mapeo de origen (df) -> destino (hoja)
+    src_dst_pairs = [
+        (get_df_col("Endpoint name"),      "Nombre de equipo"),
+        (get_df_col("IP address"),         "IP"),
+        (get_df_col("MAC address"),        "Mac"),
+        (get_df_col("Last logged on user"),"Last logged on user"),
+        (get_df_col("Last Startup"),       "Last Startup"),
+        (get_df_col("Last Shutdown"),      "Last Shutdown"),
+        (get_df_col("Protection Manager"), "Protection Manager"),
+        (get_df_col("Agent Program"),      "Agent Program"),
+    ]
+
+    # Validación mínima: al menos una columna clave debe existir
+    if not any(src for src, _ in src_dst_pairs):
+        raise ValueError("El insumo de Endpoint no contiene ninguna de las columnas esperadas.")
+
+    # 3) Construir mapa de headers de la hoja destino
+    headers_map = _build_header_map(ws, header_row=1)
+
+    def get_dst_col(title: str) -> Optional[int]:
+        return headers_map.get(_norm_text(title))
+
+    # 4) Limpiar datos, preservando filas según keep_rows
+    _delete_data_rows(ws, keep_rows=keep_rows)
+
+    # 5) Insertar filas nuevas a partir de start_row
+    start_row = keep_rows + 1  # normalmente 3
+    rows_written = 0
+
+    # Indices de columnas de destino
+    dst_col_indices: Dict[str, int] = {}
+    for _, dst_name in src_dst_pairs:
+        col_idx = get_dst_col(dst_name)
+        if col_idx:
+            dst_col_indices[dst_name] = col_idx
+
+    # Índices para Estado y Last logged on user
+    col_estado = get_dst_col("Estado")
+    col_last_user = get_dst_col("Last logged on user")
+
+    # Escribir valores fila por fila
+    for i, (_, row) in enumerate(df.iterrows(), start=0):
+        dest_row = start_row + i
+        # Para cada par mapeado, si existe fuente y destino, escribir
+        for (src_name, dst_name) in src_dst_pairs:
+            if not src_name:
+                continue
+            dst_col = dst_col_indices.get(dst_name)
+            if not dst_col:
+                continue
+            value = row[src_name]
+            _set_cell(ws, dest_row, dst_col, value)
+
+        # Reglas para Estado (depende de Protection Manager)
+        if col_estado:
+            pm_col = dst_col_indices.get("Protection Manager")
+            pm_val = ws.cell(row=dest_row, column=pm_col).value if pm_col else None
+            pm_norm = _norm_text(pm_val)
+            if pm_norm and ("standard endpoint" in pm_norm or "standard enpoint" in pm_norm):  # tolerar typo
+                estado_val = "Antivirus Ins."
+            else:
+                estado_val = "NO REPORTA"
+            _set_cell(ws, dest_row, col_estado, estado_val)
+
+        rows_written += 1
+
+    end_row = start_row + rows_written - 1
+
+    # 6) Copiar fórmulas desde la fila plantilla (2) a nuevas filas
+    if keep_rows >= 2 and rows_written > 0 and ws.max_row >= 2:
+        _copy_formula_row(ws, from_row=2, to_row_start=start_row, to_row_end=end_row)
+
+    # 7) Eliminar filas sin "Last logged on user"
+    if col_last_user and rows_written > 0:
+        # Recorremos de abajo hacia arriba para evitar desplazamientos
+        for r in range(end_row, start_row - 1, -1):
+            val = ws.cell(row=r, column=col_last_user).value
+            if val is None or str(val).strip() == "":
+                ws.delete_rows(r, 1)
+                rows_written -= 1
+                end_row -= 1
+
+    # 8) Guardar
+    wb.save(master_path)
+
+    return {
+        "sheet": sheet_name,
+        "rows_written": max(rows_written, 0),
+        "start_row": start_row,
+        "end_row": max(end_row, start_row - 1),
+        "keep_rows": keep_rows,
     }
 
-    # construir df_out con columnas maestras (solo las columnas mapeadas que existan en endpoint)
-    df_out = pd.DataFrame()
-    for ep_col_norm, master_col in mapping.items():
-        if ep_col_norm in df.columns:
-            df_out[master_col] = df[ep_col_norm]
-        else:
-            # si no existe, crea columna vacía
-            df_out[master_col] = pd.NA
 
-    # añadimos columna Estado Absolute? no la escribimos, ya que es formula en maestro
-    # Guardar backup
-    backup = None
-    if make_backup:
-        backup = backup_file(master_path)
+# =============================== Utilidad genérica ===============================
 
-    # Abrir maestro y localizar hoja
-    wb = load_workbook(master_path)
-    ws = _find_sheet(wb, "Antivirus")
-    if ws is None:
-        raise ValueError("Hoja 'Antivirus' no encontrada en el maestro.")
+def replace_sheet_with_df(master_path: str, sheet_name: str, df: pd.DataFrame, keep_rows: int = 1) -> Dict:
+    """Reemplaza los datos de una hoja con los de un DataFrame, preservando encabezados.
+    - Mantiene la fila 1 como encabezado (y opcionalmente la fila 2 como plantilla si keep_rows>=2)
+    - Copia fórmulas de la fila plantilla si existe y keep_rows>=2
+    """
+    wb = load_workbook(master_path, data_only=False)
+    if sheet_name not in wb.sheetnames:
+        raise ValueError(f"La hoja '{sheet_name}' no existe en el maestro.")
+    ws = wb[sheet_name]
 
-    # localizar header row y mapear columnas
-    expected_headers = list(df_out.columns) + ['estado', 'estado absolute']
-    header_row = _find_header_row(ws, expected_headers, max_scan=6)
-    master_map = _map_master_headers(ws, header_row)
+    headers_map = _build_header_map(ws, header_row=1)
+    _delete_data_rows(ws, keep_rows=keep_rows)
 
-    # borrar filas debajo de keep_rows
-    insert_row = max(keep_rows + 1, header_row + 1)
-    if ws.max_row >= insert_row:
-        ws.delete_rows(insert_row, ws.max_row - (insert_row-1))
+    start_row = keep_rows + 1
+    rows_written = 0
 
-    # escribir df_out
-    write_row = insert_row
-    for _, row in df_out.iterrows():
-        for col_name in df_out.columns:
-            master_idx = master_map.get(_normalize(col_name))
-            if master_idx:
-                ws.cell(row=write_row, column=master_idx).value = row[col_name]
-        write_row += 1
+    # Escribir por coincidencia de encabezados (columna a columna)
+    for i, (_, row) in enumerate(df.iterrows(), start=0):
+        r = start_row + i
+        for col_name in df.columns:
+            dst_col = headers_map.get(_norm_text(col_name))
+            if dst_col:
+                ws.cell(row=r, column=dst_col, value=row[col_name])
+        rows_written += 1
 
-    # Actualizar columna 'Estado' basado en 'Protection Manager'
-    pm_idx = master_map.get(_normalize('protection manager'))
-    estado_idx = master_map.get(_normalize('estado')) or master_map.get(_normalize('estado_gen')) or None
-    # si no se encuentra 'estado', tratamos de encontrar 'estado' en cualquier header que contenga 'estado'
-    if estado_idx is None:
-        for k, v in master_map.items():
-            if 'estado' in k:
-                estado_idx = v
-                break
+    # Copia de fórmulas si hay plantilla
+    if keep_rows >= 2 and rows_written > 0 and ws.max_row >= 2:
+        _copy_formula_row(ws, from_row=2, to_row_start=start_row, to_row_end=start_row + rows_written - 1)
 
-    if pm_idx and estado_idx:
-        for r in range(insert_row, ws.max_row + 1):
-            pm_val = ws.cell(row=r, column=pm_idx).value
-            text = '' if pm_val is None else str(pm_val).lower()
-            if 'standard' in text and 'endpoint' in text:
-                ws.cell(row=r, column=estado_idx).value = "Antivirus Ins."
-            else:
-                ws.cell(row=r, column=estado_idx).value = "NO REPORTA"
-
-    # Eliminar filas sin 'last logged on user'
-    llu_idx = master_map.get(_normalize('last logged on user'))
-    if llu_idx:
-        for r in range(ws.max_row, insert_row-1, -1):
-            v = ws.cell(row=r, column=llu_idx).value
-            if v is None or (isinstance(v, str) and v.strip() == ''):
-                ws.delete_rows(r, 1)
-
-    # Forzar recálculo y guardar
-    try:
-        wb.calc_properties.fullCalcOnLoad = True
-    except:
-        try:
-            wb.calculation_properties.fullCalcOnLoad = True
-        except:
-            pass
-
-    out = save_as if save_as else master_path
-    wb.save(out)
-    return {"master": master_path, "endpoint": endpoint_path, "rows_written": len(df_out), "backup": backup, "saved_to": out}
-
+    wb.save(master_path)
+    return {"sheet": sheet_name, "rows_written": rows_written, "start_row": start_row}
 # ---------------------------
 # Insumo 3: Actualizar hoja ESTADO_GEN_USUARIO
 # ---------------------------
