@@ -1,6 +1,7 @@
 body {
     font-family: Inter, Source Code Pro;
-    background: #f8f9fa;
+    /*background: #f8f9fa;*/
+    background: blanchedalmond;
     margin: 20px;
 }
 .container {

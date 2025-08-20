@@ -35,7 +35,7 @@
 
     <div>
     <section class="integracion">
-      <h2>Integrar archivo al Maestro</h2>
+      <h2>Integrar archivo al Inventario</h2>
       <form action="{{ url_for('integrar') }}" method="POST" class="form-integrar">
         <label for="filename">Archivo (subido):</label>
         <select name="filename" required>
@@ -46,6 +46,7 @@
 
         <label for="tipo_insumo">Tipo de Insumo:</label>
         <select name="tipo_insumo" required>
+          <option value="endpoint">Inventario (Inventatio Proveedor)</option>
           <option value="endpoint">Endpoint (Antivirus)</option>
           <option value="personal">Personal (ESTADO_GEN_USUARIO)</option>
           <option value="tmp">tmp (Useraranda_BLOGIK)</option>
