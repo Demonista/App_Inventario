@@ -2,27 +2,72 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <title>Configuración - Inventario</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+  <meta charset="UTF-8">
+  <title>Configuración - Etiquetado Insumo 1</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
-<body>
-  <div class="container">
-    <h1>Configuración de Integración</h1>
-    <a href="{{ url_for('index') }}" class="btn gris">Volver</a>
+<body class="bg-light">
 
-    <form method="POST">
-      <label for="empresa_default">Empresa por defecto:</label>
-      <input type="text" name="empresa_default" value="{{ config.get('empresa_default', '') }}">
+<div class="container py-5">
+  <h1 class="mb-4 text-center">⚙️ Configuración de Etiquetado (Insumo 1)</h1>
 
-      <label for="usar_fecha_archivo">Usar fecha del archivo si no hay fecha en columnas:</label>
-      <input type="checkbox" name="usar_fecha_archivo" {% if config.get('usar_fecha_archivo') %}checked{% endif %}>
+  <form method="POST">
+    <div class="mb-3">
+      <label for="hoja_etiquetas" class="form-label">Hoja de Inventario donde se aplicarán las etiquetas:</label>
+      <input type="text" name="hoja_etiquetas" id="hoja_etiquetas" class="form-control"
+             value="{{ config.get('hoja_etiquetas', 'ESTADO_GEN_USUARIO') }}">
+    </div>
 
-      <label for="fecha_formato">Formato de fecha (ej: %d/%m/%Y):</label>
-      <input type="text" name="fecha_formato" value="{{ config.get('fecha_formato', '%Y-%m-%d') }}">
+    <h4 class="mt-4">Reglas de Etiquetado</h4>
+    <p class="text-muted">Define las condiciones y la etiqueta que se aplicará automáticamente.</p>
 
-      <button class="btn azul" type="submit">Guardar configuración</button>
-    </form>
-  </div>
+    <table class="table table-bordered" id="tabla-reglas">
+      <thead class="table-dark">
+        <tr>
+          <th>Columna</th>
+          <th>Valor</th>
+          <th>Etiqueta</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for regla in config.get('etiquetas', []) %}
+        <tr>
+          <td><input type="text" name="columna[]" class="form-control" value="{{ regla['columna'] }}"></td>
+          <td><input type="text" name="valor[]" class="form-control" value="{{ regla['valor'] }}"></td>
+          <td><input type="text" name="etiqueta[]" class="form-control" value="{{ regla['etiqueta'] }}"></td>
+          <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">🗑</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <button type="button" class="btn btn-success mb-3" onclick="agregarFila()">➕ Agregar regla</button>
+
+    <div class="text-center">
+      <button type="submit" class="btn btn-primary">💾 Guardar configuración</button>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">⬅ Volver</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  function agregarFila() {
+    let tabla = document.getElementById("tabla-reglas").getElementsByTagName("tbody")[0];
+    let nuevaFila = tabla.insertRow();
+    nuevaFila.innerHTML = `
+      <td><input type="text" name="columna[]" class="form-control"></td>
+      <td><input type="text" name="valor[]" class="form-control"></td>
+      <td><input type="text" name="etiqueta[]" class="form-control"></td>
+      <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">🗑</button></td>
+    `;
+  }
+
+  function eliminarFila(boton) {
+    let fila = boton.closest("tr");
+    fila.remove();
+  }
+</script>
+
 </body>
 </html>

@@ -6,24 +6,65 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Inventario de Escritorio</title>
+
+  <!-- Estilos propios -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}?v=2">
+
+  <!-- Scripts propios -->
   <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
+
+  <style>
+    /* Ocultar dinámicamente keep_rows */
+    #keep_rows_group {
+      display: none;
+    }
+
+    /* Pequeñas mejoras visuales */
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    nav.top-nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    nav.top-nav label {
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table th, table td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    table th {
+      background: #f4f4f4;
+    }
+  </style>
 </head>
 <body>
   
-    <h1>Inventario de Escritorio VTI</h1>
+  <h1>Inventario de Escritorio VTI</h1>
 
-    <div class="container">
+  <div class="container">
+
+    <!-- Barra superior -->
     <nav class="top-nav">
-        <label for="fecha_consulta">Fecha de consulta:</label>
-        <input type="date" id="fecha_consulta" name="fecha">
+      <label for="fecha_consulta">Fecha de consulta:</label>
+      <input type="date" id="fecha_consulta" name="fecha">
 
-        <a href="#" class="btn azul" onclick="irAlHistorial()">Historial</a>
-        <a href="{{ url_for('configuracion') }}" class="btn morado">Configuración</a>
-        <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
+      <a href="{{ url_for('historial') }}" class="btn azul">Historial</a>
+      <a href="{{ url_for('configuracion') }}" class="btn morado">Configuración</a>
+      <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
     </nav>
 
-    <div>
+    <!-- Subida de archivos -->
     <section class="uploader">
       <h2>Subir archivos (Insumos)</h2>
       <form method="POST" enctype="multipart/form-data">
@@ -31,12 +72,13 @@
         <button class="btn azul" type="submit">Subir</button>
       </form>
     </section>
-    </div>
 
-    <div>
+    <!-- Integración -->
     <section class="integracion">
       <h2>Integrar archivo al Inventario</h2>
       <form action="{{ url_for('integrar') }}" method="POST" class="form-integrar">
+        
+        <!-- Selección de archivo -->
         <label for="filename">Archivo (subido):</label>
         <select name="filename" required>
           {% for a in archivos %}
@@ -44,32 +86,34 @@
           {% endfor %}
         </select>
 
+        <!-- Selección de tipo de insumo -->
         <label for="tipo_insumo">Tipo de Insumo:</label>
-        <select name="tipo_insumo" required>
-          <option value="endpoint">Inventario (Inventatio Proveedor)</option>
-          <option value="endpoint">Endpoint (Antivirus)</option>
-          <option value="personal">Personal (ESTADO_GEN_USUARIO)</option>
-          <option value="tmp">tmp (Useraranda_BLOGIK)</option>
-          <option value="da">DA (Reporte DA)</option>
+        <select name="tipo_insumo" id="tipo_insumo" required>
+          <option value="maestro">Inventario Proveedor (Insumo 1)</option>
+          <option value="endpoint">Endpoint Antivirus (Insumo 2)</option>
+          <option value="personal">Personal - ESTADO_GEN_USUARIO (Insumo 3)</option>
+          <option value="useraranda">Useraranda_BLOGIK (Insumo 4)</option>
+          <option value="da">Reporte DA (Insumo 5)</option>
         </select>
 
-        <label for="keep_rows">Filas a preservar (keep_rows):</label>
-        <input type="number" name="keep_rows" value="2" min="1" max="10">
+        <!-- Opción especial: keep_rows -->
+        <div id="keep_rows_group">
+          <label for="keep_rows">Filas a preservar (keep_rows):</label>
+          <input type="number" name="keep_rows" value="2" min="1" max="10">
+        </div>
 
         <button class="btn morado" type="submit">Integrar archivo seleccionado</button>
       </form>
     </section>
-    </div>
     
-    <div>
+    <!-- Exportaciones -->
     <section class="exports">
       <h2>Exportar</h2>
       <button class="btn verde" onclick="exportarExcel()">Exportar a Excel</button>
       <button class="btn rojo" onclick="exportarPDF()">Exportar a PDF</button>
     </section>
-    </div>
     
-
+    <!-- Listado de archivos subidos -->
     <section class="listado">
       <h2>Archivos subidos</h2>
       <table>
@@ -90,7 +134,10 @@
             <td>{{ archivo.tipo }}</td>
             <td>{{ '✔️' if archivo.cargado else '❌' }}</td>
             <td>
-              <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" class="btn amarillo">Eliminar</a>
+              <!-- Confirmación con JS antes de eliminar -->
+              <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
+                 class="btn amarillo"
+                 onclick="return confirmarEliminacion('{{ archivo.nombre }}')">Eliminar</a>
             </td>
           </tr>
           {% else %}
@@ -100,5 +147,25 @@
       </table>
     </section>
   </div>
+
+  <!-- Script para mostrar/ocultar keep_rows -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const tipoInsumo = document.getElementById("tipo_insumo");
+      const keepGroup = document.getElementById("keep_rows_group");
+
+      function toggleKeepRows() {
+        // Solo visible si el insumo es endpoint
+        if (tipoInsumo.value === "endpoint") {
+          keepGroup.style.display = "block";
+        } else {
+          keepGroup.style.display = "none";
+        }
+      }
+
+      tipoInsumo.addEventListener("change", toggleKeepRows);
+      toggleKeepRows(); // ejecutar al inicio
+    });
+  </script>
 </body>
 </html>

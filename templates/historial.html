@@ -5,67 +5,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historial de Archivos</title>
+    <!-- Bootstrap 5 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body class="bg-light">
 
     <div class="container py-5">
+
+        <!-- Título -->
         <h1 class="mb-4 text-center">📂 Historial de Archivos</h1>
+
+        <!-- Paginación -->
         <div class="d-flex justify-content-center mt-4">
-    <nav>
-        <ul class="pagination">
-            {% if page > 1 %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('historial', page=page-1) }}">Anterior</a>
-                </li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-            {% endif %}
+            <nav>
+                <ul class="pagination">
 
-            {% for p in range(1, total_pages + 1) %}
-                <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('historial', page=p) }}">{{ p }}</a>
-                </li>
-            {% endfor %}
+                    <!-- Botón Anterior -->
+                    {% if page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('historial', page=page-1) }}">Anterior</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                    {% endif %}
 
-            {% if page < total_pages %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('historial', page=page+1) }}">Siguiente</a>
-                </li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
-            {% endif %}
-        </ul>
-    </nav>
-    </div>
-
-        {% if archivos %}
-            <table class="table table-striped table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Nombre del archivo</th>
-                        <th>Fecha de modificación</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for archivo in archivos %}
-                        <tr>
-                            <td>{{ archivo.nombre }}</td>
-                            <td>{{ archivo.fecha }}</td>
-                        </tr>
+                    <!-- Números de página -->
+                    {% for p in range(1, total_pages + 1) %}
+                        <li class="page-item {% if p == page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('historial', page=p) }}">{{ p }}</a>
+                        </li>
                     {% endfor %}
-                </tbody>
-            </table>
+
+                    <!-- Botón Siguiente -->
+                    {% if page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('historial', page=page+1) }}">Siguiente</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+                    {% endif %}
+
+                </ul>
+            </nav>
+        </div>
+
+        <!-- Tabla con archivos -->
+        {% if archivos %}
+            <div class="table-responsive mt-4">
+                <table class="table table-striped table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>📄 Nombre del archivo</th>
+                            <th>📅 Fecha de modificación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for archivo in archivos %}
+                            <tr>
+                                <td>{{ archivo.nombre }}</td>
+                                <td>{{ archivo.fecha }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% else %}
-            <div class="alert alert-warning text-center">
-                No hay archivos en el historial.
+            <!-- Mensaje si no hay historial -->
+            <div class="alert alert-warning text-center mt-4">
+                ⚠️ No hay archivos en el historial.
             </div>
         {% endif %}
 
+        <!-- Botón volver al inicio -->
         <div class="text-center mt-4">
             <a href="{{ url_for('index') }}" class="btn btn-primary">⬅ Volver al inicio</a>
         </div>
+
     </div>
 
+    <!-- Bootstrap JS (opcional si usas paginación avanzada o tooltips) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
