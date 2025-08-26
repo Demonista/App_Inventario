@@ -13,11 +13,13 @@
 // Ir al historial, con opción de filtrar por fecha
 // ------------------------------------------------------
 function irAlHistorial() {
-  const fecha = document.getElementById('fecha_consulta');
+  const fechaInput = document.getElementById('fecha_consulta');
   let url = '/historial';
-  if (fecha && fecha.value) {
-    url += '?fecha=' + encodeURIComponent(fecha.value);
+
+  if (fechaInput && fechaInput.value) {
+    url += '?fecha=' + encodeURIComponent(fechaInput.value);
   }
+
   window.location.href = url;
 }
 
@@ -39,11 +41,11 @@ function integrarArchivos() {
       return response.json();
     })
     .then(data => {
-      alert("✅ Integración completada: " + data.mensaje);
+      alert("✅ Integración completada: " + (data.mensaje || "Proceso finalizado"));
       location.reload(); // refresca para mostrar resultados actualizados
     })
     .catch(err => {
-      console.error(err);
+      console.error("❌ Error en integración:", err);
       alert("❌ Error durante la integración de insumos.");
     });
 }
@@ -55,21 +57,14 @@ function exportarExcel() {
   fetch('/exportar-excel')
     .then(response => {
       if (!response.ok) throw new Error('Error en la exportación a Excel');
-      return response.blob(); // respuesta como archivo binario
+      return response.blob();
     })
     .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'inventario.xlsx'; // nombre sugerido
-      document.body.appendChild(a);
-      a.click(); // forzar descarga
-      a.remove();
-      window.URL.revokeObjectURL(url); // liberar memoria
+      descargarArchivo(blob, "inventario.xlsx");
     })
     .catch(err => {
-      console.error(err);
-      alert('❌ No se pudo exportar a Excel.');
+      console.error("❌ Error en exportación Excel:", err);
+      alert("❌ No se pudo exportar a Excel.");
     });
 }
 
@@ -80,22 +75,29 @@ function exportarPDF() {
   fetch('/exportar-pdf')
     .then(response => {
       if (!response.ok) throw new Error('Error en la exportación a PDF');
-      return response.blob(); // respuesta como archivo binario
+      return response.blob();
     })
     .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'inventario.pdf'; // nombre sugerido
-      document.body.appendChild(a);
-      a.click(); // forzar descarga
-      a.remove();
-      window.URL.revokeObjectURL(url); // liberar memoria
+      descargarArchivo(blob, "inventario.pdf");
     })
     .catch(err => {
-      console.error(err);
-      alert('❌ No se pudo exportar a PDF.');
+      console.error("❌ Error en exportación PDF:", err);
+      alert("❌ No se pudo exportar a PDF.");
     });
+}
+
+// ------------------------------------------------------
+// Utilidad para descargar archivo desde blob
+// ------------------------------------------------------
+function descargarArchivo(blob, nombreArchivo) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 // ------------------------------------------------------

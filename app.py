@@ -210,6 +210,30 @@ def configuracion():
     """Página de configuración"""
     return render_template("config.html", config=config)
 
+@app.route("/configuracion_general")
+def configuracion_general():
+    return render_template("config_general.html")
+
+@app.route("/guardar_configuracion_general", methods=["POST"])
+def guardar_configuracion_general():
+    etiquetas = request.form.getlist("etiquetas[]")
+    columnas = request.form.getlist("columnas[]")
+    valores = request.form.getlist("valores[]")
+
+    reglas = []
+    for i in range(len(etiquetas)):
+        reglas.append({
+            "etiqueta": etiquetas[i],
+            "columna": columnas[i],
+            "valor": valores[i]
+        })
+
+    CONFIG["validaciones"] = reglas
+    guardar_configuracion()
+
+    flash("✅ Configuración general guardada con éxito.", "success")
+    return redirect(url_for("configuracion_general"))
+
 
 @app.route("/eliminar/<nombre_archivo>")
 def eliminar(nombre_archivo):
