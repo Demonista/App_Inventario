@@ -1,28 +1,51 @@
-<!-- templates/configuracion.html -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title>Configuración - Inventario</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
-</head>
-<body>
-  <div class="container">
-    <h1>Configuración de Integración</h1>
-    <a href="{{ url_for('index') }}" class="btn gris">Volver</a>
+{% extends "layout.html" %}
 
-    <form method="POST">
-      <label for="empresa_default">Empresa por defecto:</label>
-      <input type="text" name="empresa_default" value="{{ config.get('empresa_default', '') }}">
+{% block content %}
+<h1>⚙️ Configuración General</h1>
 
-      <label for="usar_fecha_archivo">Usar fecha del archivo si no hay fecha en columnas:</label>
-      <input type="checkbox" name="usar_fecha_archivo" {% if config.get('usar_fecha_archivo') %}checked{% endif %}>
+<!-- =============================
+     Formulario de configuración
+============================== -->
+<form action="{{ url_for('guardar_config') }}" method="POST">
+    <table>
+        <thead>
+            <tr>
+                <th>Usuario</th>
+                <th>Correo / ID</th>
+                <th>Activo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usuario in usuarios %}
+            <tr>
+                <!-- Usuario fijo (no editable) -->
+                <td>
+                    <input type="text" name="usuarios[]" value="{{ usuario.nombre }}" readonly class="input-readonly">
+                </td>
 
-      <label for="fecha_formato">Formato de fecha (ej: %d/%m/%Y):</label>
-      <input type="text" name="fecha_formato" value="{{ config.get('fecha_formato', '%Y-%m-%d') }}">
+                <!-- Correo editable -->
+                <td>
+                    <input type="email" name="correos[]" value="{{ usuario.correo }}" placeholder="correo@dominio.com" required>
+                </td>
 
-      <button class="btn azul" type="submit">Guardar configuración</button>
-    </form>
-  </div>
-</body>
-</html>
+                <!-- Checkbox de activación -->
+                <td style="text-align: center;">
+                    <input type="checkbox" name="activos[]" value="{{ usuario.nombre }}"
+                           {% if usuario.activo %}checked{% endif %}>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3">⚠️ No hay usuarios configurados en el sistema.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Botones -->
+    <div style="margin-top: 15px; text-align: center;">
+        <button type="submit" class="btn verde">💾 Guardar cambios</button>
+        <a href="{{ url_for('index') }}" class="btn gris">🏠 Volver al inicio</a>
+    </div>
+</form>
+{% endblock %}

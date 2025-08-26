@@ -1,23 +1,56 @@
 // static/js/scripts.js
-// ================================
+// ======================================================
 // Funciones de soporte para la app Flask de Inventario
-// Incluye navegación al historial con filtro de fecha
-// y exportación de datos a Excel y PDF
-// ================================
+// Incluye:
+// - Navegación al historial (con filtro por fecha)
+// - Integración de insumos con maestro
+// - Exportación a Excel y PDF
+// - Confirmación de eliminación de archivos
+// - Utilidades para interfaz y mensajes
+// ======================================================
 
-// Ir al historial, filtrando por fecha si se selecciona
+// ------------------------------------------------------
+// Ir al historial, con opción de filtrar por fecha
+// ------------------------------------------------------
 function irAlHistorial() {
-  const fecha = document.getElementById('fecha_consulta').value;
+  const fecha = document.getElementById('fecha_consulta');
   let url = '/historial';
-  if (fecha) {
-    url += '?fecha=' + encodeURIComponent(fecha);
+  if (fecha && fecha.value) {
+    url += '?fecha=' + encodeURIComponent(fecha.value);
   }
   window.location.href = url;
 }
 
-// -------------------------------
+// ------------------------------------------------------
+// Integrar archivos subidos con el maestro
+// (manda petición POST al backend Flask)
+// ------------------------------------------------------
+function integrarArchivos() {
+  if (!confirm("🔗 ¿Deseas integrar todos los insumos al maestro?")) {
+    return;
+  }
+
+  fetch('/integrar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(response => {
+      if (!response.ok) throw new Error('Error en la integración');
+      return response.json();
+    })
+    .then(data => {
+      alert("✅ Integración completada: " + data.mensaje);
+      location.reload(); // refresca para mostrar resultados actualizados
+    })
+    .catch(err => {
+      console.error(err);
+      alert("❌ Error durante la integración de insumos.");
+    });
+}
+
+// ------------------------------------------------------
 // Exportar inventario a Excel
-// -------------------------------
+// ------------------------------------------------------
 function exportarExcel() {
   fetch('/exportar-excel')
     .then(response => {
@@ -40,9 +73,9 @@ function exportarExcel() {
     });
 }
 
-// -------------------------------
+// ------------------------------------------------------
 // Exportar inventario a PDF
-// -------------------------------
+// ------------------------------------------------------
 function exportarPDF() {
   fetch('/exportar-pdf')
     .then(response => {
@@ -65,15 +98,15 @@ function exportarPDF() {
     });
 }
 
-// -------------------------------
+// ------------------------------------------------------
 // Confirmación antes de eliminar archivo
-// (esto protege de clics accidentales en "Eliminar")
-// -------------------------------
+// (protección contra clics accidentales)
+// ------------------------------------------------------
 function confirmarEliminacion(nombreArchivo) {
   return confirm(`⚠️ ¿Seguro que deseas eliminar el archivo "${nombreArchivo}"?`);
 }
 
-// -------------------------------
-// Mensaje de consola para depuración
-// -------------------------------
-console.log("✅ JS cargado correctamente.");
+// ------------------------------------------------------
+// Mensaje en consola para depuración
+// ------------------------------------------------------
+console.log("✅ scripts.js cargado correctamente.");

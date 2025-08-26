@@ -1,244 +1,232 @@
 # app.py
 """
-Aplicación Flask para manejo de insumos y actualización del libro Maestro.
-
+Aplicación Flask para manejo de insumos y actualización del libro maestro.
 Incluye:
-- subida de archivos (múltiple)
-- listado de archivos subidos
-- integración de insumos por tipo (1 a 5)
-- historial de operaciones (paginado)
-- configuración general editable
-- exportación del Maestro
-- eliminación de archivos subidos
+- Subida de archivos (con selección de tipo de insumo)
+- Listado de archivos subidos
+- Integración al inventario maestro según tipo de insumo
+- Historial y configuración persistidos en JSON
+- Exportación de inventario a Excel y PDF
 """
 
 import os
 import json
-import pandas as pd
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+import pandas as pd
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
-# -------------------
-# Configuración inicial
-# -------------------
+# --- Configuración inicial ---
 app = Flask(__name__)
-app.secret_key = "supersecret"  # Necesario para mensajes flash
+app.secret_key = "clave_secreta"  # Necesario para flash messages
 
 UPLOAD_FOLDER = "uploads"
-CONFIG_FILE = "config.json"
-HISTORIAL_FILE = "historial.json"
-MAESTRO_FILE = "static/Maestro.xlsx"
-
+DATA_FOLDER = "data"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs("static", exist_ok=True)
+os.makedirs(DATA_FOLDER, exist_ok=True)
 
-# -------------------
-# Funciones auxiliares
-# -------------------
-def cargar_config():
-    """Carga configuración desde archivo JSON."""
-    if os.path.exists(CONFIG_FILE):
+ARCHIVOS_JSON = os.path.join(DATA_FOLDER, "archivos.json")
+CONFIG_JSON = os.path.join(DATA_FOLDER, "config.json")
+
+# Archivo maestro
+MAESTRO_FILE = os.path.join(DATA_FOLDER, "inventario_maestro.xlsx")
+
+
+# --- Utilidades JSON ---
+def cargar_json(ruta, default):
+    """Carga un JSON o retorna un valor por defecto si no existe/corrupción"""
+    if os.path.exists(ruta):
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(ruta, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-    return {}
+        except Exception:
+            return default
+    return default
 
-def guardar_config(config):
-    """Guarda configuración en archivo JSON."""
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=4, ensure_ascii=False)
 
-def cargar_historial():
-    """Carga historial de archivos subidos."""
-    if os.path.exists(HISTORIAL_FILE):
-        try:
-            with open(HISTORIAL_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []
-    return []
+def guardar_json(ruta, data):
+    """Guarda un JSON de forma segura"""
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-def guardar_historial(historial):
-    """Guarda historial en JSON."""
-    with open(HISTORIAL_FILE, "w", encoding="utf-8") as f:
-        json.dump(historial, f, indent=4, ensure_ascii=False)
 
-def agregar_a_historial(nombre, tipo="desconocido"):
-    """Agrega un archivo al historial."""
-    historial = cargar_historial()
-    historial.append({
-        "nombre": nombre,
+# Inicialización
+archivos = cargar_json(ARCHIVOS_JSON, [])
+config = cargar_json(CONFIG_JSON, {"autor": "Sistema", "version": "1.0"})
+
+
+# --- Rutas principales ---
+@app.route("/")
+def index():
+    """Página principal con listado de archivos subidos"""
+    return render_template("index.html", archivos=archivos)
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    """
+    Subir archivo con tipo de insumo.
+    Se guarda en /uploads y se registra en archivos.json
+    """
+    if "archivo" not in request.files:
+        flash("No se envió archivo", "error")
+        return redirect(url_for("index"))
+
+    file = request.files["archivo"]
+    tipo = request.form.get("tipo")
+
+    if not file or file.filename == "":
+        flash("Archivo no válido", "error")
+        return redirect(url_for("index"))
+
+    # Guardar archivo en uploads
+    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(filepath)
+
+    # Registro
+    nuevo_archivo = {
+        "nombre": file.filename,
         "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tipo": tipo,
         "cargado": True
-    })
-    guardar_historial(historial)
+    }
+    archivos.append(nuevo_archivo)
+    guardar_json(ARCHIVOS_JSON, archivos)
 
-# -------------------
-# Procesadores de insumos
-# -------------------
-def procesar_insumo_1(path_excel, maestro):
-    """
-    Insumo 1 (Inventario Maestro).
-    - Es la base del libro maestro.
-    - No se reemplaza, se mantiene como hoja original.
-    """
-    df_dict = pd.read_excel(path_excel, sheet_name=None)
-    maestro.update(df_dict)  # Cargamos todas las hojas
-    return maestro
+    flash(f"Archivo {file.filename} subido como {tipo}", "success")
+    return redirect(url_for("index"))
 
-def procesar_insumo_2(path_excel, maestro):
-    """Insumo 2 (Antivirus)."""
-    df = pd.read_excel(path_excel)
-    maestro["Antivirus"] = df
-    return maestro
-
-def procesar_insumo_3(path_excel, maestro):
-    """Insumo 3 (Personal)."""
-    df = pd.read_excel(path_excel)
-    maestro["ESTADO_GEN_USUARIO"] = df
-    return maestro
-
-def procesar_insumo_4(path_excel, maestro):
-    """Insumo 4 (TMP)."""
-    df = pd.read_excel(path_excel)
-    maestro["Useraranda_BLOGIK"] = df
-    return maestro
-
-def procesar_insumo_5(path_excel, maestro):
-    """Insumo 5 (Directorio Activo)."""
-    df = pd.read_excel(path_excel)
-    maestro["Reporte DA"] = df
-    return maestro
-
-# Mapeo de insumos con procesadores
-PROCESADORES = {
-    "inventario": procesar_insumo_1,
-    "endpoint": procesar_insumo_2,
-    "personal": procesar_insumo_3,
-    "tmp": procesar_insumo_4,
-    "da": procesar_insumo_5,
-}
-
-# -------------------
-# Rutas principales
-# -------------------
-@app.route("/", methods=["GET", "POST"])
-def index():
-    """Pantalla principal: subida y listado de archivos."""
-    if request.method == "POST":
-        if "files[]" not in request.files:
-            flash("No seleccionaste archivos")
-            return redirect(url_for("index"))
-
-        files = request.files.getlist("files[]")
-        for file in files:
-            if file and file.filename:
-                save_path = os.path.join(UPLOAD_FOLDER, file.filename)
-                file.save(save_path)
-                agregar_a_historial(file.filename)
-
-        flash("Archivos subidos correctamente")
-        return redirect(url_for("index"))
-
-    historial = cargar_historial()
-    return render_template("index.html", archivos=historial)
 
 @app.route("/integrar", methods=["POST"])
 def integrar():
-    """Integración de un insumo al Maestro."""
+    """
+    Integra un archivo subido en el maestro según tipo de insumo.
+    - Si es 'maestro', reemplaza el maestro actual.
+    - Si es otro insumo, se hace merge con el maestro.
+    """
     filename = request.form.get("filename")
     tipo_insumo = request.form.get("tipo_insumo")
 
-    if not filename or not tipo_insumo:
-        flash("Faltan datos para la integración")
+    if not filename:
+        flash("Debe seleccionar un archivo para integrar", "error")
         return redirect(url_for("index"))
 
-    path_excel = os.path.join(UPLOAD_FOLDER, filename)
-    if not os.path.exists(path_excel):
-        flash("El archivo no existe")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    if not os.path.exists(filepath):
+        flash("El archivo no existe en el servidor", "error")
         return redirect(url_for("index"))
 
-    # Si no existe el maestro, crear uno nuevo vacío
-    if os.path.exists(MAESTRO_FILE):
-        maestro = pd.read_excel(MAESTRO_FILE, sheet_name=None)
-    else:
-        maestro = {}
+    try:
+        # Leer archivo subido
+        df_insumo = pd.read_excel(filepath)
 
-    # Procesar insumo según tipo
-    if tipo_insumo in PROCESADORES:
-        maestro = PROCESADORES[tipo_insumo](path_excel, maestro)
-    else:
-        flash("Tipo de insumo desconocido")
-        return redirect(url_for("index"))
+        if tipo_insumo == "maestro":
+            # Guardar como maestro directamente
+            df_insumo.to_excel(MAESTRO_FILE, index=False)
+            flash(f"El archivo {filename} se estableció como Maestro", "success")
 
-    # Guardar el Maestro actualizado
-    with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl", mode="w") as writer:
-        for hoja, df in maestro.items():
-            if not df.empty:
-                df.to_excel(writer, sheet_name=hoja, index=False)
+        else:
+            if not os.path.exists(MAESTRO_FILE):
+                flash("No existe maestro para integrar", "error")
+                return redirect(url_for("index"))
 
-    flash(f"Archivo {filename} integrado al Maestro como insumo {tipo_insumo}")
+            # Cargar maestro existente
+            df_maestro = pd.read_excel(MAESTRO_FILE)
+
+            # TODO: aquí se pueden programar reglas de negocio específicas
+            # Ejemplo básico → concatenar
+            df_resultado = pd.concat([df_maestro, df_insumo], ignore_index=True)
+
+            # Guardar de nuevo el maestro
+            df_resultado.to_excel(MAESTRO_FILE, index=False)
+            flash(f"Archivo {filename} integrado como {tipo_insumo}", "success")
+
+    except Exception as e:
+        flash(f"Error al integrar: {str(e)}", "error")
+
     return redirect(url_for("index"))
 
-@app.route("/download_maestro")
+
+@app.route("/exportar-excel")
+def exportar_excel():
+    """Exporta el maestro actual a Excel"""
+    if not os.path.exists(MAESTRO_FILE):
+        flash("No hay maestro disponible para exportar", "error")
+        return redirect(url_for("index"))
+    return send_file(MAESTRO_FILE, as_attachment=True, download_name="inventario.xlsx")
+
+
+@app.route("/exportar-pdf")
+def exportar_pdf():
+    """Exporta el maestro a PDF con ReportLab"""
+    if not os.path.exists(MAESTRO_FILE):
+        flash("No hay maestro disponible para exportar", "error")
+        return redirect(url_for("index"))
+
+    df = pd.read_excel(MAESTRO_FILE)
+
+    pdf_file = os.path.join(DATA_FOLDER, "inventario.pdf")
+    c = canvas.Canvas(pdf_file, pagesize=letter)
+    width, height = letter
+
+    # Título
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, height - 50, "Inventario Maestro")
+
+    # Imprimir primeras filas
+    c.setFont("Helvetica", 10)
+    y = height - 80
+    for i, row in df.head(30).iterrows():
+        line = " | ".join([str(v) for v in row.values])
+        c.drawString(50, y, line[:120])  # recorte por ancho de página
+        y -= 15
+        if y < 50:
+            c.showPage()
+            y = height - 50
+
+    c.save()
+
+    return send_file(pdf_file, as_attachment=True, download_name="inventario.pdf")
+
+
+@app.route("/download-maestro")
 def download_maestro():
-    """Descargar el archivo Maestro."""
-    if os.path.exists(MAESTRO_FILE):
-        return send_file(MAESTRO_FILE, as_attachment=True)
-    flash("No hay Maestro generado todavía.")
-    return redirect(url_for("index"))
+    """Descarga directa del archivo maestro"""
+    if not os.path.exists(MAESTRO_FILE):
+        flash("No hay maestro disponible para descargar", "error")
+        return redirect(url_for("index"))
+    return send_file(MAESTRO_FILE, as_attachment=True, download_name="inventario_maestro.xlsx")
+
+
+@app.route("/historial")
+def historial():
+    """Historial basado en los archivos cargados"""
+    return render_template("historial.html", archivos=archivos)
+
+
+@app.route("/configuracion")
+def configuracion():
+    """Página de configuración"""
+    return render_template("config.html", config=config)
+
 
 @app.route("/eliminar/<nombre_archivo>")
 def eliminar(nombre_archivo):
-    """Eliminar archivo subido y actualizar historial."""
+    """Eliminar un archivo subido"""
+    global archivos
+    archivos = [a for a in archivos if a["nombre"] != nombre_archivo]
+    guardar_json(ARCHIVOS_JSON, archivos)
+
     path = os.path.join(UPLOAD_FOLDER, nombre_archivo)
     if os.path.exists(path):
         os.remove(path)
 
-    historial = cargar_historial()
-    historial = [h for h in historial if h["nombre"] != nombre_archivo]
-    guardar_historial(historial)
-
-    flash(f"Archivo {nombre_archivo} eliminado.")
+    flash(f"Archivo {nombre_archivo} eliminado", "success")
     return redirect(url_for("index"))
 
-@app.route("/historial")
-def historial():
-    """Vista paginada de historial de archivos."""
-    page = int(request.args.get("page", 1))
-    per_page = 5
-    historial = cargar_historial()
-    total_pages = max(1, (len(historial) + per_page - 1) // per_page)
 
-    start = (page - 1) * per_page
-    end = start + per_page
-    archivos_paginados = historial[start:end]
-
-    return render_template("historial.html",
-                           archivos=archivos_paginados,
-                           page=page,
-                           total_pages=total_pages)
-
-@app.route("/configuracion", methods=["GET", "POST"])
-def configuracion():
-    """Vista de configuración general."""
-    config = cargar_config()
-
-    if request.method == "POST":
-        config["empresa_default"] = request.form.get("empresa_default", "")
-        config["usar_fecha_archivo"] = "usar_fecha_archivo" in request.form
-        config["fecha_formato"] = request.form.get("fecha_formato", "%Y-%m-%d")
-        guardar_config(config)
-        flash("Configuración guardada correctamente.")
-        return redirect(url_for("configuracion"))
-
-    return render_template("configuracion_general.html", config=config)
-
-# -------------------
-# Run
-# -------------------
+# --- Main ---
 if __name__ == "__main__":
     app.run(debug=True)
+

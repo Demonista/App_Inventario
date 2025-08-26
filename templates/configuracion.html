@@ -1,73 +1,51 @@
-<!-- templates/configuracion.html -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Configuración - Etiquetado Insumo 1</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-</head>
-<body class="bg-light">
+{% extends "layout.html" %}
 
-<div class="container py-5">
-  <h1 class="mb-4 text-center">⚙️ Configuración de Etiquetado (Insumo 1)</h1>
+{% block content %}
+<h1>⚙️ Configuración General</h1>
 
-  <form method="POST">
-    <div class="mb-3">
-      <label for="hoja_etiquetas" class="form-label">Hoja de Inventario donde se aplicarán las etiquetas:</label>
-      <input type="text" name="hoja_etiquetas" id="hoja_etiquetas" class="form-control"
-             value="{{ config.get('hoja_etiquetas', 'ESTADO_GEN_USUARIO') }}">
-    </div>
+<!-- =============================
+     Formulario de configuración
+============================== -->
+<form action="{{ url_for('guardar_config') }}" method="POST">
+    <table>
+        <thead>
+            <tr>
+                <th>Usuario</th>
+                <th>Correo / ID</th>
+                <th>Activo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usuario in usuarios %}
+            <tr>
+                <!-- Usuario fijo (no editable) -->
+                <td>
+                    <input type="text" name="usuarios[]" value="{{ usuario.nombre }}" readonly class="input-readonly">
+                </td>
 
-    <h4 class="mt-4">Reglas de Etiquetado</h4>
-    <p class="text-muted">Define las condiciones y la etiqueta que se aplicará automáticamente.</p>
+                <!-- Correo editable -->
+                <td>
+                    <input type="email" name="correos[]" value="{{ usuario.correo }}" placeholder="correo@dominio.com" required>
+                </td>
 
-    <table class="table table-bordered" id="tabla-reglas">
-      <thead class="table-dark">
-        <tr>
-          <th>Columna</th>
-          <th>Valor</th>
-          <th>Etiqueta</th>
-          <th>Acción</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for regla in config.get('etiquetas', []) %}
-        <tr>
-          <td><input type="text" name="columna[]" class="form-control" value="{{ regla['columna'] }}"></td>
-          <td><input type="text" name="valor[]" class="form-control" value="{{ regla['valor'] }}"></td>
-          <td><input type="text" name="etiqueta[]" class="form-control" value="{{ regla['etiqueta'] }}"></td>
-          <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">🗑</button></td>
-        </tr>
-        {% endfor %}
-      </tbody>
+                <!-- Checkbox de activación -->
+                <td style="text-align: center;">
+                    <input type="checkbox" name="activos[]" value="{{ usuario.nombre }}"
+                           {% if usuario.activo %}checked{% endif %}>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3">⚠️ No hay usuarios configurados en el sistema.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
 
-    <button type="button" class="btn btn-success mb-3" onclick="agregarFila()">➕ Agregar regla</button>
-
-    <div class="text-center">
-      <button type="submit" class="btn btn-primary">💾 Guardar configuración</button>
-      <a href="{{ url_for('index') }}" class="btn btn-secondary">⬅ Volver</a>
+    <!-- Botones -->
+    <div style="margin-top: 15px; text-align: center;">
+        <button type="submit" class="btn verde">💾 Guardar cambios</button>
+        <a href="{{ url_for('index') }}" class="btn gris">🏠 Volver al inicio</a>
     </div>
-  </form>
-</div>
-
-<script>
-  function agregarFila() {
-    let tabla = document.getElementById("tabla-reglas").getElementsByTagName("tbody")[0];
-    let nuevaFila = tabla.insertRow();
-    nuevaFila.innerHTML = `
-      <td><input type="text" name="columna[]" class="form-control"></td>
-      <td><input type="text" name="valor[]" class="form-control"></td>
-      <td><input type="text" name="etiqueta[]" class="form-control"></td>
-      <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">🗑</button></td>
-    `;
-  }
-
-  function eliminarFila(boton) {
-    let fila = boton.closest("tr");
-    fila.remove();
-  }
-</script>
-
-</body>
-</html>
+</form>
+{% endblock %}

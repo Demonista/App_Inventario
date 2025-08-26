@@ -1,11 +1,22 @@
+/* ==============================
+   Estilos base
+============================== */
 body {
-    font-family: Inter, Source Code Pro;
-    /*background: #f8f9fa;*/
+    font-family: Inter, Source Code Pro, Arial, sans-serif;
     background: blanchedalmond;
     margin: 20px;
+    color: #333;
 }
-.container {
 
+h1 {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+/* ==============================
+   Contenedor principal
+============================== */
+.container {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
@@ -14,40 +25,28 @@ body {
     padding: 40px;
     gap: 20px;
     max-width: 95%;
-    height: 600px;
+    min-height: 600px; /* para asegurar altura mínima */
     
-    place-content: flex-between flex-start;
+    justify-content: flex-start;
+    align-items: stretch;
     
     border-radius: 10px;
     box-shadow: 0 0 15px #ccc;
 }
-h1 {
-    margin-bottom: 30px;
-}
-.barra-superior {
-    display: flex;
-    place-content: flex-start flex-start;
-    margin-bottom: 30px;
-}
-.carga-archivos {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 30px;
-}
 
-/*.uploader {
-    display: flex;
-    place-content: flex-start flex-start;
-} */  
-
+/* ==============================
+   Barra superior
+============================== */
 .top-nav {
     display: flex;
     flex-wrap: wrap;
     gap: 10px; /* Espacio entre elementos */
     align-items: center;
+    justify-content: flex-start;
 }
 
 .top-nav label {
+    font-weight: bold;
     margin-right: 5px;
     white-space: nowrap;
 }
@@ -55,57 +54,77 @@ h1 {
 .top-nav input[type="date"] {
     padding: 5px;
     min-width: 150px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
 }
 
+/* Adaptabilidad */
 @media (max-width: 768px) {
     .top-nav {
         flex-direction: column;
         align-items: flex-start;
     }
-    .top-nav a {
+    .top-nav a,
+    .top-nav button {
         width: 100%;
         text-align: center;
     }
 }
 
-
+/* ==============================
+   Botones
+============================== */
 .btn {
-    margin-top: 20px;
-    
-    padding: 6px 12px;
+    padding: 6px 14px;
     border: none;
-    color: white;
     border-radius: 5px;
     cursor: pointer;
+    font-weight: bold;
+    transition: transform 0.1s ease, opacity 0.2s ease;
 }
-.btn.azul { background: #007bff; margin-bottom: 20px;
-    margin-top: 20px;}
-.btn.morado { background: #6f42c1; margin-bottom: 20px;
-    margin-top: 20px;}
-.btn.verde { 
-    background: #28a745;
-    margin-bottom: 20px;
-    margin-top: 20px;
-}
-.btn.rojo { background: #dc3545; margin-bottom: 20px;
-    margin-top: 20px;}
-.btn.amarillo { background: #ffc107; color: black; }
-.btn.gris { background: #6c757d; margin-bottom: 20px;
-    margin-top: 20px;}
 
+/* Animación al pasar */
+.btn:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+
+/* Variantes */
+.btn.azul { background: #007bff; color: white; }
+.btn.morado { background: #6f42c1; color: white; }
+.btn.verde { background: #28a745; color: white; }
+.btn.rojo { background: #dc3545; color: white; }
+.btn.amarillo { background: #ffc107; color: black; }
+.btn.gris { background: #6c757d; color: white; }
+
+/* ==============================
+   Tablas
+============================== */
 table {
-    /*display: flex;
-    justify-content: space-between;*/
-    width: 90%;
+    width: 95%;
     margin: auto;
     border-collapse: collapse;
+    border-radius: 6px;
+    overflow: hidden; /* bordes redondeados */
+    box-shadow: 0 0 8px rgba(0,0,0,0.1);
 }
+
 th, td {
     padding: 10px;
     border-bottom: 1px solid #ddd;
-}
-th {
-    background-color: #007bff;
-    color: white;
+    text-align: center;
 }
 
+th {
+    background-color: #007bff;
+    color: blueviolet;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}

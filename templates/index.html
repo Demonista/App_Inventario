@@ -1,171 +1,87 @@
-<!-- templates/index.html -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Inventario de Escritorio</title>
+{% extends "layout.html" %}
 
-  <!-- Estilos propios -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}?v=2">
+{% block content %}
+<h1>📦 Gestión de Insumos</h1>
 
-  <!-- Scripts propios -->
-  <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
+<!-- =============================
+     Formulario de carga de insumos
+============================== -->
+<section class="carga-archivos">
+    <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+        <label for="archivo">Seleccionar archivo:</label>
+        <input type="file" id="archivo" name="archivo" accept=".xls,.xlsx" required>
 
-  <style>
-    /* Ocultar dinámicamente keep_rows */
-    #keep_rows_group {
-      display: none;
-    }
-
-    /* Pequeñas mejoras visuales */
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    nav.top-nav {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    nav.top-nav label {
-      font-weight: bold;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    table th, table td {
-      padding: 8px;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-    table th {
-      background: #f4f4f4;
-    }
-  </style>
-</head>
-<body>
-  
-  <h1>Inventario de Escritorio VTI</h1>
-
-  <div class="container">
-
-    <!-- Barra superior -->
-    <nav class="top-nav">
-      <label for="fecha_consulta">Fecha de consulta:</label>
-      <input type="date" id="fecha_consulta" name="fecha">
-
-      <a href="{{ url_for('historial') }}" class="btn azul">Historial</a>
-      <a href="{{ url_for('configuracion') }}" class="btn morado">Configuración</a>
-      <a href="{{ url_for('download_maestro') }}" class="btn verde">Descargar Maestro</a>
-    </nav>
-
-    <!-- Subida de archivos -->
-    <section class="uploader">
-      <h2>Subir archivos (Insumos)</h2>
-      <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="files[]" multiple required>
-        <button class="btn azul" type="submit">Subir</button>
-      </form>
-    </section>
-
-    <!-- Integración -->
-    <section class="integracion">
-      <h2>Integrar archivo al Inventario</h2>
-      <form action="{{ url_for('integrar') }}" method="POST" class="form-integrar">
-        
-        <!-- Selección de archivo -->
-        <label for="filename">Archivo (subido):</label>
-        <select name="filename" required>
-          {% for a in archivos %}
-            <option value="{{ a.nombre }}">{{ a.nombre }} — {{ a.fecha }} — {{ a.tipo }}</option>
-          {% endfor %}
+        <!-- Selección del tipo de insumo -->
+        <label for="tipo">Tipo de insumo:</label>
+        <select id="tipo" name="tipo" required>
+            <option value="">-- Seleccionar --</option>
+            <option value="maestro">📘 Insumo 1 (Inventario Maestro)</option>
+            <option value="antivirus">🛡 Antivirus</option>
+            <option value="personal">👨‍💼 Personal</option>
+            <option value="da">🔑 Directorio Activo</option>
+            <option value="endpoint">💻 Endpoints</option>
+            <option value="tmp">📂 Archivos Temporales</option>
         </select>
 
-        <!-- Selección de tipo de insumo -->
-        <label for="tipo_insumo">Tipo de Insumo:</label>
-        <select name="tipo_insumo" id="tipo_insumo" required>
-          <option value="maestro">Inventario Proveedor (Insumo 1)</option>
-          <option value="endpoint">Endpoint Antivirus (Insumo 2)</option>
-          <option value="personal">Personal - ESTADO_GEN_USUARIO (Insumo 3)</option>
-          <option value="useraranda">Useraranda_BLOGIK (Insumo 4)</option>
-          <option value="da">Reporte DA (Insumo 5)</option>
-        </select>
+        <button type="submit" class="btn verde">⬆ Subir archivo</button>
+    </form>
+</section>
 
-        <!-- Opción especial: keep_rows -->
-        <div id="keep_rows_group">
-          <label for="keep_rows">Filas a preservar (keep_rows):</label>
-          <input type="number" name="keep_rows" value="2" min="1" max="10">
-        </div>
-
-        <button class="btn morado" type="submit">Integrar archivo seleccionado</button>
-      </form>
-    </section>
-    
-    <!-- Exportaciones -->
-    <section class="exports">
-      <h2>Exportar</h2>
-      <button class="btn verde" onclick="exportarExcel()">Exportar a Excel</button>
-      <button class="btn rojo" onclick="exportarPDF()">Exportar a PDF</button>
-    </section>
-    
-    <!-- Listado de archivos subidos -->
-    <section class="listado">
-      <h2>Archivos subidos</h2>
-      <table>
+<!-- =============================
+     Listado de insumos cargados
+============================== -->
+<section>
+    <h2>📋 Archivos subidos</h2>
+    <table>
         <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Estado</th>
-            <th>Acción</th>
-          </tr>
+            <tr>
+                <th>Archivo</th>
+                <th>Tipo</th>
+                <th>Fecha de subida</th>
+                <th>Acciones</th>
+            </tr>
         </thead>
         <tbody>
-          {% for archivo in archivos %}
-          <tr>
-            <td>{{ archivo.nombre }}</td>
-            <td>{{ archivo.fecha }}</td>
-            <td>{{ archivo.tipo }}</td>
-            <td>{{ '✔️' if archivo.cargado else '❌' }}</td>
-            <td>
-              <!-- Confirmación con JS antes de eliminar -->
-              <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
-                 class="btn amarillo"
-                 onclick="return confirmarEliminacion('{{ archivo.nombre }}')">Eliminar</a>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="5">No hay archivos cargados.</td></tr>
-          {% endfor %}
+            {% for archivo in archivos %}
+            <tr>
+                <td>{{ archivo.nombre }}</td>
+                <td>{{ archivo.tipo }}</td>
+                <td>{{ archivo.fecha }}</td>
+                <td>
+                    <!-- Formulario para integrar este archivo -->
+                    <form action="{{ url_for('integrar') }}" method="POST" style="display:inline;">
+                        <input type="hidden" name="filename" value="{{ archivo.nombre }}">
+                        <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo }}">
+                        <button type="submit" class="btn morado">🔗 Integrar</button>
+                    </form>
+
+                    <!-- Descargar Maestro (si es insumo maestro) -->
+                    {% if archivo.tipo == "maestro" %}
+                        <a href="{{ url_for('download_maestro') }}" class="btn azul">⬇ Descargar Maestro</a>
+                    {% endif %}
+
+                    <!-- Eliminar archivo -->
+                    <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
+                       class="btn rojo"
+                       onclick="return confirm('¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
+                       🗑 Eliminar
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4">No hay archivos cargados.</td>
+            </tr>
+            {% endfor %}
         </tbody>
-      </table>
-    </section>
-  </div>
+    </table>
+</section>
 
-  <!-- Script para mostrar/ocultar keep_rows -->
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      const tipoInsumo = document.getElementById("tipo_insumo");
-      const keepGroup = document.getElementById("keep_rows_group");
-
-      function toggleKeepRows() {
-        // Solo visible si el insumo es endpoint
-        if (tipoInsumo.value === "endpoint") {
-          keepGroup.style.display = "block";
-        } else {
-          keepGroup.style.display = "none";
-        }
-      }
-
-      tipoInsumo.addEventListener("change", toggleKeepRows);
-      toggleKeepRows(); // ejecutar al inicio
-    });
-  </script>
-</body>
-</html>
+<!-- =============================
+     Botones de exportación global
+============================== -->
+<section style="text-align: center; margin-top: 20px;">
+    <a href="{{ url_for('exportar_excel') }}" class="btn verde">📤 Exportar Maestro a Excel</a>
+    <a href="{{ url_for('exportar_pdf') }}" class="btn rojo">📄 Exportar Maestro a PDF</a>
+</section>
+{% endblock %}
