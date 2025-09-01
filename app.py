@@ -53,7 +53,7 @@ def guardar_json(ruta, data):
 
 # Inicialización
 archivos = cargar_json(ARCHIVOS_JSON, [])
-config = cargar_json(CONFIG_JSON, {"autor": "Sistema", "version": "1.0"})
+config = cargar_json(CONFIG_JSON, {"autor": "Sistema", "version": "1.0", "usuarios": []})
 
 
 # --- Rutas principales ---
@@ -65,10 +65,7 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    """
-    Subir archivo con tipo de insumo.
-    Se guarda en /uploads y se registra en archivos.json
-    """
+    """Subir archivo con tipo de insumo"""
     if "archivo" not in request.files:
         flash("No se envió archivo", "error")
         return redirect(url_for("index"))
@@ -80,7 +77,6 @@ def upload():
         flash("Archivo no válido", "error")
         return redirect(url_for("index"))
 
-    # Guardar archivo en uploads
     filepath = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(filepath)
 
@@ -100,11 +96,7 @@ def upload():
 
 @app.route("/integrar", methods=["POST"])
 def integrar():
-    """
-    Integra un archivo subido en el maestro según tipo de insumo.
-    - Si es 'maestro', reemplaza el maestro actual.
-    - Si es otro insumo, se hace merge con el maestro.
-    """
+    """Integra archivo subido en el maestro según tipo de insumo"""
     filename = request.form.get("filename")
     tipo_insumo = request.form.get("tipo_insumo")
 
@@ -118,30 +110,20 @@ def integrar():
         return redirect(url_for("index"))
 
     try:
-        # Leer archivo subido
         df_insumo = pd.read_excel(filepath)
 
         if tipo_insumo == "maestro":
-            # Guardar como maestro directamente
             df_insumo.to_excel(MAESTRO_FILE, index=False)
             flash(f"El archivo {filename} se estableció como Maestro", "success")
-
         else:
             if not os.path.exists(MAESTRO_FILE):
                 flash("No existe maestro para integrar", "error")
                 return redirect(url_for("index"))
 
-            # Cargar maestro existente
             df_maestro = pd.read_excel(MAESTRO_FILE)
-
-            # TODO: aquí se pueden programar reglas de negocio específicas
-            # Ejemplo básico → concatenar
             df_resultado = pd.concat([df_maestro, df_insumo], ignore_index=True)
-
-            # Guardar de nuevo el maestro
             df_resultado.to_excel(MAESTRO_FILE, index=False)
             flash(f"Archivo {filename} integrado como {tipo_insumo}", "success")
-
     except Exception as e:
         flash(f"Error al integrar: {str(e)}", "error")
 
@@ -150,7 +132,6 @@ def integrar():
 
 @app.route("/exportar-excel")
 def exportar_excel():
-    """Exporta el maestro actual a Excel"""
     if not os.path.exists(MAESTRO_FILE):
         flash("No hay maestro disponible para exportar", "error")
         return redirect(url_for("index"))
@@ -159,40 +140,34 @@ def exportar_excel():
 
 @app.route("/exportar-pdf")
 def exportar_pdf():
-    """Exporta el maestro a PDF con ReportLab"""
     if not os.path.exists(MAESTRO_FILE):
         flash("No hay maestro disponible para exportar", "error")
         return redirect(url_for("index"))
 
     df = pd.read_excel(MAESTRO_FILE)
-
     pdf_file = os.path.join(DATA_FOLDER, "inventario.pdf")
     c = canvas.Canvas(pdf_file, pagesize=letter)
     width, height = letter
 
-    # Título
     c.setFont("Helvetica-Bold", 14)
     c.drawString(50, height - 50, "Inventario Maestro")
 
-    # Imprimir primeras filas
     c.setFont("Helvetica", 10)
     y = height - 80
     for i, row in df.head(30).iterrows():
         line = " | ".join([str(v) for v in row.values])
-        c.drawString(50, y, line[:120])  # recorte por ancho de página
+        c.drawString(50, y, line[:120])
         y -= 15
         if y < 50:
             c.showPage()
             y = height - 50
 
     c.save()
-
     return send_file(pdf_file, as_attachment=True, download_name="inventario.pdf")
 
 
 @app.route("/download-maestro")
 def download_maestro():
-    """Descarga directa del archivo maestro"""
     if not os.path.exists(MAESTRO_FILE):
         flash("No hay maestro disponible para descargar", "error")
         return redirect(url_for("index"))
@@ -201,18 +176,47 @@ def download_maestro():
 
 @app.route("/historial")
 def historial():
-    """Historial basado en los archivos cargados"""
-    return render_template("historial.html", archivos=archivos)
+    return render_template("historial.html", historial=archivos)
 
 
+# --- Configuración de usuarios y sistema ---
 @app.route("/configuracion")
 def configuracion():
-    """Página de configuración"""
-    return render_template("config.html", config=config)
+    """Página de configuración general (usuarios, autor, versión)"""
+    return render_template("configuracion.html", config=config)
 
+
+@app.route("/guardar_configuracion", methods=["POST"])
+def guardar_configuracion():
+    """Guardar cambios en la configuración general"""
+    usuarios = request.form.getlist("usuarios[]")
+    correos = request.form.getlist("correos[]")
+    activos = request.form.getlist("activos[]")
+
+    config["usuarios"] = []
+    for i in range(len(usuarios)):
+        config["usuarios"].append({
+            "nombre": usuarios[i],
+            "correo": correos[i],
+            "activo": usuarios[i] in activos
+        })
+
+    autor = request.form.get("autor")
+    version = request.form.get("version")
+    if autor: config["autor"] = autor
+    if version: config["version"] = version
+
+    guardar_json(CONFIG_JSON, config)
+    flash("✅ Configuración general guardada correctamente.", "success")
+    return redirect(url_for("configuracion"))
+
+
+# --- Configuración de validaciones Insumo 1 ---
 @app.route("/configuracion_general")
 def configuracion_general():
-    return render_template("config_general.html")
+    reglas = config.get("validaciones", [])
+    return render_template("configuracion_general.html", reglas=reglas)
+
 
 @app.route("/guardar_configuracion_general", methods=["POST"])
 def guardar_configuracion_general():
@@ -228,16 +232,16 @@ def guardar_configuracion_general():
             "valor": valores[i]
         })
 
-    CONFIG["validaciones"] = reglas
-    guardar_configuracion()
+    config["validaciones"] = reglas
+    guardar_json(CONFIG_JSON, config)
 
-    flash("✅ Configuración general guardada con éxito.", "success")
+    flash("✅ Configuración de validaciones guardada con éxito.", "success")
     return redirect(url_for("configuracion_general"))
 
 
+# --- Eliminar archivo ---
 @app.route("/eliminar/<nombre_archivo>")
 def eliminar(nombre_archivo):
-    """Eliminar un archivo subido"""
     global archivos
     archivos = [a for a in archivos if a["nombre"] != nombre_archivo]
     guardar_json(ARCHIVOS_JSON, archivos)
@@ -253,4 +257,3 @@ def eliminar(nombre_archivo):
 # --- Main ---
 if __name__ == "__main__":
     app.run(debug=True)
-

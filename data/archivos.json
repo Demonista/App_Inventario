@@ -1,0 +1,20 @@
+[
+  {
+    "nombre": "Oct09Reporte-Data_Inventariodeprueba.xlsx",
+    "fecha": "2025-08-26 22:42:00",
+    "tipo": "maestro",
+    "cargado": true
+  },
+  {
+    "nombre": "Enpoint antivirus.xlsx",
+    "fecha": "2025-08-26 22:43:05",
+    "tipo": "antivirus",
+    "cargado": true
+  },
+  {
+    "nombre": "tmpArandira.xlsx",
+    "fecha": "2025-08-26 23:21:06",
+    "tipo": "Aranda",
+    "cargado": true
+  }
+]
