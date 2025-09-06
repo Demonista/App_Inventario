@@ -3,7 +3,7 @@
 ============================== */
 body {
     font-family: Inter, Source Code Pro, Arial, sans-serif;
-    background: white-space;
+    background: white;
     margin: 20px;
     color: #333;
 }
@@ -39,35 +39,70 @@ h1 {
 ============================== */
 .top-nav {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px; /* Espacio entre elementos */
+    flex-direction: column;   /* 🔹 primero botones, luego historial */
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+/* Contenedor de botones principales */
+.nav-botones {
+    display: flex;
+    flex-wrap: wrap;          /* 🔹 permite que bajen si no caben */
+    gap: 8px;
     align-items: center;
     justify-content: flex-start;
 }
 
-.top-nav label {
-    font-weight: bold;
-    margin-right: 5px;
-    white-space: nowrap;
+.nav-botones a,
+.nav-botones button {
+    flex: 1 1 auto;           /* 🔹 permite que se adapten */
+    max-width: 25%;           /* 🔹 nunca más grandes del 25% */
+    min-width: 120px;         /* 🔹 asegura que no se encojan demasiado */
+    text-align: center;
 }
 
-.top-nav input[type="date"] {
+/* Contenedor de historial (fecha + botón buscar) */
+.nav-fecha {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.nav-fecha label {
+    font-weight: bold;
+    white-space: nowrap;   /* 🔹 evita que se rompa en varias líneas */
+}
+
+.nav-fecha input[type="date"] {
     padding: 5px;
     min-width: 150px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    font-size: 14px;
 }
 
 /* Adaptabilidad */
 @media (max-width: 768px) {
-    .top-nav {
+    .nav-botones {
+        justify-content: center; /* 🔹 más centrado en móvil */
+    }
+
+    .nav-botones a,
+    .nav-botones button {
+        max-width: 45%;   /* 🔹 en móvil pueden usar hasta 2 por fila */
+        min-width: 100px;
+    }
+
+    .nav-fecha {
         flex-direction: column;
         align-items: stretch;
     }
-    .top-nav a,
-    .top-nav button {
-        width: 25%;
-        text-align: center;
+
+    .nav-fecha input,
+    .nav-fecha button {
+        width: 100%;      /* 🔹 los inputs/btn de historial sí ocupan todo */
     }
 }
 
@@ -79,8 +114,13 @@ h1 {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    /*font-weight: bold;*/
+    display: block;             /* 🔹 mismo comportamiento en <a> y <button> */
+    width: 100%;                /* 🔹 todos ocupan el mismo ancho */
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
     transition: transform 0.1s ease, opacity 0.2s ease;
+    box-sizing: border-box;     /* 🔹 evita diferencias por padding */
 }
 
 /* Animación al pasar */
@@ -89,13 +129,27 @@ h1 {
     transform: scale(1.02);
 }
 
-
 /* Tamaño pequeño uniforme */
 .btn-small {
     font-size: 13px;
     padding: 6px 14px;
     min-width: 90px;
 }
+
+/* Contenedor de botones en la tabla */
+.acciones-botones {
+    display: flex;
+    flex-direction: column;   /* 🔹 apilados */
+    gap: 5px;
+    align-items: stretch;     /* 🔹 todos con mismo ancho */
+}
+
+/* Formularios dentro del contenedor */
+.acciones-botones form {
+    width: 100%;              /* 🔹 asegura que el <button> no se achique */
+    margin: 0;
+}
+
 
 
 /* Variantes */
@@ -106,6 +160,14 @@ h1 {
 .btn.amarillo { background: #ffc107; color: black; }
 .btn.gris { background: #6c757d; color: white; }
 
+
+.exportacion-global{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    max-width: 80%;
+    gap: 20px;  
+}
 /* ==============================
    Tablas
 ============================== */

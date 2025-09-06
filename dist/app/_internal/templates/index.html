@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<h1>📦 Gestión de Insumos</h1>
+<h1>📦 Inventario de escritorio VTI</h1>
 
 <!-- =============================
      Formulario de carga de insumos
@@ -16,11 +16,12 @@
         <select id="tipo" name="tipo" required>
             <option value="">-- Seleccionar --</option>
             <option value="maestro">📘 Insumo 1 (Inventario Maestro)</option>
-            <option value="antivirus">🛡 Antivirus</option>
-            <option value="personal">👨‍💼 Personal</option>
-            <option value="da">🔑 Directorio Activo</option>
-            <option value="endpoint">💻 Endpoints</option>
-            <option value="tmp">📂 Archivos Temporales</option>
+            <option value="antivirus">🛡 Insumo 2 Antivirus</option>
+            <option value="personal_ingresos">👨‍💼 Insumo 3a Talento humano ingresos</option>
+            <option value="personal_retiros">👨‍💼 Insumo 3b Talento humano retiros</option>
+            <option value="personal_actualizacion">👨‍💼 Insumo 3c Talento humano actualización</option>
+            <option value="aranda">💻 Insumo 4 Aranda</option>
+            <option value="directorio_activo">📂 Insumo 5 Directorio Activo</option>
         </select>
 
         <button type="submit" class="btn verde">⬆ Subir archivo</button>
@@ -32,7 +33,7 @@
 ============================== -->
 <section>
     <h2>📋 Archivos subidos</h2>
-    <table>
+    <table class="tabla-insumos">
         <thead>
             <tr>
                 <th>Archivo</th>
@@ -48,24 +49,26 @@
                 <td>{{ archivo.tipo }}</td>
                 <td>{{ archivo.fecha }}</td>
                 <td>
-                    <!-- Formulario para integrar este archivo -->
-                    <form action="{{ url_for('integrar') }}" method="POST" style="display:inline;">
-                        <input type="hidden" name="filename" value="{{ archivo.nombre }}">
-                        <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo }}">
-                        <button type="submit" class="btn morado">🔗 Integrar</button>
-                    </form>
+                    <div class="acciones-botones">
+                        <!-- Formulario para integrar este archivo -->
+                        <form action="{{ url_for('integrar') }}" method="POST" class="accion-form">
+                            <input type="hidden" name="filename" value="{{ archivo.nombre }}">
+                            <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo }}">
+                            <button type="submit" class="btn morado btn-small">🔗 Integrar</button>
+                        </form>
 
-                    <!-- Descargar Maestro (si es insumo maestro) -->
-                    {% if archivo.tipo == "maestro" %}
-                        <a href="{{ url_for('download_maestro') }}" class="btn azul">⬇ Descargar Maestro</a>
-                    {% endif %}
+                        <!-- Descargar Maestro (si es insumo maestro) -->
+                        {% if archivo.tipo == "maestro" %}
+                            <a href="{{ url_for('download_maestro') }}" class="btn azul btn-small">⬇ Maestro</a>
+                        {% endif %}
 
-                    <!-- Eliminar archivo -->
-                    <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
-                       class="btn rojo"
-                       onclick="return confirm('¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
-                       🗑 Eliminar
-                    </a>
+                        <!-- Eliminar archivo -->
+                        <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
+                           class="btn rojo btn-small"
+                           onclick="return confirm('¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
+                           🗑 Eliminar
+                        </a>
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -80,8 +83,8 @@
 <!-- =============================
      Botones de exportación global
 ============================== -->
-<section style="text-align: center; margin-top: 20px;">
-    <a href="{{ url_for('exportar_excel') }}" class="btn verde">📤 Exportar Maestro a Excel</a>
-    <a href="{{ url_for('exportar_pdf') }}" class="btn rojo">📄 Exportar Maestro a PDF</a>
+<section class="exportacion-global">
+    <a href="{{ url_for('exportar_excel') }}" class="btn verde btn-small">📤 Exportar Excel</a>
+    <a href="{{ url_for('exportar_pdf') }}" class="btn rojo btn-small">📄 Exportar PDF</a>
 </section>
 {% endblock %}
