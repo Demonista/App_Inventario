@@ -1,3 +1,4 @@
+
 {% extends "layout.html" %}
 
 {% block content %}
@@ -8,23 +9,32 @@
 ============================== -->
 <section class="carga-archivos">
     <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
-        <label for="archivo">Seleccionar archivo:</label>
-        <input type="file" id="archivo" name="archivo" accept=".xls,.xlsx" required>
+
+        <!-- Selección del archivo -->
+        <div>
+            <label for="archivo">Seleccionar archivo:</label>
+            <input type="file" id="archivo" name="archivo" accept=".xls,.xlsx" required>
+        </div>
 
         <!-- Selección del tipo de insumo -->
-        <label for="tipo">Tipo de insumo:</label>
-        <select id="tipo" name="tipo" required>
-            <option value="">-- Seleccionar --</option>
-            <option value="maestro">📘 Insumo 1 (Inventario Maestro)</option>
-            <option value="antivirus">🛡 Insumo 2 Antivirus</option>
-            <option value="personal_ingresos">👨‍💼 Insumo 3a Talento humano ingresos</option>
-            <option value="personal_retiros">👨‍💼 Insumo 3b Talento humano retiros</option>
-            <option value="personal_actualizacion">👨‍💼 Insumo 3c Talento humano actualización</option>
-            <option value="aranda">💻 Insumo 4 Aranda</option>
-            <option value="directorio_activo">📂 Insumo 5 Directorio Activo</option>
-        </select>
+        <div>
+            <label for="tipo">Tipo de insumo:</label>
+            <select id="tipo" name="tipo" required>
+                <option value="">-- Seleccionar --</option>
+                <option value="maestro">📘 Insumo 1 (Inventario Maestro)</option>
+                <option value="antivirus">🛡 Insumo 2 Antivirus</option>
+                <option value="personal_ingresos">👨‍💼 Insumo 3a Talento humano ingresos</option>
+                <option value="personal_retiros">👨‍💼 Insumo 3b Talento humano retiros</option>
+                <option value="personal_actualizacion">👨‍💼 Insumo 3c Talento humano actualización</option>
+                <option value="aranda">💻 Insumo 4 Aranda</option>
+                <option value="directorio_activo">📂 Insumo 5 Directorio Activo</option>
+            </select>
+        </div>
 
-        <button type="submit" class="btn verde">⬆ Subir archivo</button>
+        <!-- Botón subir -->
+        <div>
+            <button type="submit" class="btn verde">⬆ Subir archivo</button>
+        </div>
     </form>
 </section>
 
@@ -50,19 +60,19 @@
                 <td>{{ archivo.fecha }}</td>
                 <td>
                     <div class="acciones-botones">
-                        <!-- Formulario para integrar este archivo -->
+                        <!-- Integrar -->
                         <form action="{{ url_for('integrar') }}" method="POST" class="accion-form">
                             <input type="hidden" name="filename" value="{{ archivo.nombre }}">
                             <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo }}">
                             <button type="submit" class="btn morado btn-small">🔗 Integrar</button>
                         </form>
 
-                        <!-- Descargar Maestro (si es insumo maestro) -->
+                        <!-- Descargar Maestro -->
                         {% if archivo.tipo == "maestro" %}
                             <a href="{{ url_for('download_maestro') }}" class="btn azul btn-small">⬇ Maestro</a>
                         {% endif %}
 
-                        <!-- Eliminar archivo -->
+                        <!-- Eliminar -->
                         <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
                            class="btn rojo btn-small"
                            onclick="return confirm('¿Seguro que deseas eliminar {{ archivo.nombre }}?');">

@@ -12,35 +12,39 @@
      Formulario dinámico de reglas
 ============================== -->
 <form action="{{ url_for('guardar_configuracion_general') }}" method="POST">
-    <table>
-        <thead>
-            <tr>
-                <th>Etiqueta / Resultado</th>
-                <th>Criterio de Columna</th>
-                <th>Valor esperado</th>
-                <th>Acción</th>
-            </tr>
-        </thead>
-        <tbody id="tabla-config">
-            {% for regla in reglas %}
-            <tr>
-                <td><input type="text" name="etiquetas[]" value="{{ regla.etiqueta }}" required></td>
-                <td><input type="text" name="columnas[]" value="{{ regla.columna }}" required></td>
-                <td><input type="text" name="valores[]" value="{{ regla.valor }}" required></td>
-                <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
-            </tr>
-            {% endfor %}
+    
+    <!-- Contenedor con scroll lateral -->
+    <div class="tabla-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Etiqueta / Resultado</th>
+                    <th>Criterio de Columna</th>
+                    <th>Valor esperado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-config">
+                {% for regla in reglas %}
+                <tr>
+                    <td><input type="text" name="etiquetas[]" value="{{ regla.etiqueta }}" required></td>
+                    <td><input type="text" name="columnas[]" value="{{ regla.columna }}" required></td>
+                    <td><input type="text" name="valores[]" value="{{ regla.valor }}" required></td>
+                    <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
+                </tr>
+                {% endfor %}
 
-            {% if reglas|length == 0 %}
-            <tr>
-                <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
-                <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
-                <td><input type="text" name="valores[]" placeholder="Ej: No instalado" required></td>
-                <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
-            </tr>
-            {% endif %}
-        </tbody>
-    </table>
+                {% if reglas|length == 0 %}
+                <tr>
+                    <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
+                    <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
+                    <td><input type="text" name="valores[]" placeholder="Ej: No instalado" required></td>
+                    <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 
     <!-- Botones -->
     <div style="margin-top: 15px; text-align: center;">

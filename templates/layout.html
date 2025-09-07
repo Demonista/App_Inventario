@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title or "Inventario de Escritorio VTI" }}</title>
     
-    <!-- Estilos propios -->
+    <!-- Estilos -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
-
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Code+Pro&display=swap" rel="stylesheet">
 </head>
@@ -18,12 +17,14 @@
              Barra superior de navegación
         ============================== -->
         <nav class="top-nav">
-            <a href="{{ url_for('index') }}" class="btn azul" title="Ir a Inicio">🏠 Inicio</a>
-            <a href="{{ url_for('historial') }}" class="btn morado" title="Ver historial de procesos">📑 Historial</a>
-            <a href="{{ url_for('configuracion') }}" class="btn gris" title="Configurar usuarios">⚙️ Configuración</a>
-            <a href="{{ url_for('configuracion_general') }}" class="btn verde" title="Configurar validaciones del Insumo 1">🛠️ Validaciones</a>
-            <br><br>
-            
+            <!-- Botones principales -->
+            <div class="nav-botones">
+                <a href="{{ url_for('index') }}" class="btn azul" title="Ir a Inicio">🏠 Inicio</a>
+                <a href="{{ url_for('historial') }}" class="btn morado" title="Ver historial de procesos">📑 Historial</a>
+                <a href="{{ url_for('configuracion') }}" class="btn gris" title="Configurar usuarios">⚙️ Configuración</a>
+                <a href="{{ url_for('configuracion_general') }}" class="btn verde" title="Configurar validaciones del Insumo 1">🛠️ Validaciones</a>
+            </div>
+
             <!-- Filtro de fecha para historial -->
             <div class="nav-fecha">
                 <label for="fecha_consulta"><b>Consultar historial:</b></label>
@@ -37,7 +38,6 @@
         ============================== -->
         <main>
             {% block content %}
-            <!-- Aquí se inyectará el contenido de cada página -->
             {% endblock %}
         </main>
     </div>
@@ -46,3 +46,4 @@
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
 </body>
 </html>
+

@@ -25,7 +25,7 @@ h1 {
     padding: 40px;
     gap: 20px;
     max-width: 95%;
-    min-height: 600px; /* para asegurar altura mínima */
+    min-height: 600px; /* altura mínima */
     
     justify-content: flex-start;
     align-items: stretch;
@@ -39,40 +39,38 @@ h1 {
 ============================== */
 .top-nav {
     display: flex;
-    flex-direction: column;   /* 🔹 primero botones, luego historial */
-    gap: 10px;
+    flex-direction: column;   /* primero botones, luego historial */
+    gap: 12px;
     margin-bottom: 15px;
 }
 
-/* Contenedor de botones principales */
+/* Botones principales */
 .nav-botones {
     display: flex;
-    flex-wrap: wrap;          /* 🔹 permite que bajen si no caben */
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-start;
+    flex-wrap: nowrap;          /* en escritorio siempre fila */
+    gap: 10px;
+    justify-content: space-between;
 }
 
 .nav-botones a,
 .nav-botones button {
-    flex: 1 1 auto;           /* 🔹 permite que se adapten */
-    max-width: 25%;           /* 🔹 nunca más grandes del 25% */
-    min-width: 120px;         /* 🔹 asegura que no se encojan demasiado */
+    flex: 1 1 22%;              /* cada botón ocupa máx 22% */
+    max-width: 22%;
+    min-width: 120px;
     text-align: center;
 }
 
-/* Contenedor de historial (fecha + botón buscar) */
+/* Contenedor historial */
 .nav-fecha {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
+    gap: 10px;
 }
 
 .nav-fecha label {
     font-weight: bold;
-    white-space: nowrap;   /* 🔹 evita que se rompa en varias líneas */
+    white-space: nowrap;
 }
 
 .nav-fecha input[type="date"] {
@@ -83,26 +81,41 @@ h1 {
     font-size: 14px;
 }
 
-/* Adaptabilidad */
-@media (max-width: 768px) {
-    .nav-botones {
-        justify-content: center; /* 🔹 más centrado en móvil */
+/* ==============================
+   Formulario de carga
+============================== */
+.carga-archivos form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.carga-archivos label {
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.carga-archivos input[type="file"],
+.carga-archivos select {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 250px;
+}
+
+/* Pantallas grandes: etiquetas a la izquierda */
+@media (min-width: 769px) {
+    .carga-archivos form div {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
     }
 
-    .nav-botones a,
-    .nav-botones button {
-        max-width: 45%;   /* 🔹 en móvil pueden usar hasta 2 por fila */
-        min-width: 100px;
-    }
-
-    .nav-fecha {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .nav-fecha input,
-    .nav-fecha button {
-        width: 100%;      /* 🔹 los inputs/btn de historial sí ocupan todo */
+    .carga-archivos label {
+        min-width: 160px;
+        text-align: right;
     }
 }
 
@@ -114,43 +127,38 @@ h1 {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    display: block;             /* 🔹 mismo comportamiento en <a> y <button> */
-    width: 100%;                /* 🔹 todos ocupan el mismo ancho */
+    display: block;
+    width: 100%;                 /* todos iguales */
     text-align: center;
     text-decoration: none;
     font-weight: bold;
     transition: transform 0.1s ease, opacity 0.2s ease;
-    box-sizing: border-box;     /* 🔹 evita diferencias por padding */
+    box-sizing: border-box;
 }
 
-/* Animación al pasar */
 .btn:hover {
     opacity: 0.9;
     transform: scale(1.02);
 }
 
-/* Tamaño pequeño uniforme */
 .btn-small {
     font-size: 13px;
     padding: 6px 14px;
     min-width: 90px;
 }
 
-/* Contenedor de botones en la tabla */
+/* Contenedor botones tabla */
 .acciones-botones {
     display: flex;
-    flex-direction: column;   /* 🔹 apilados */
+    flex-direction: column;
     gap: 5px;
-    align-items: stretch;     /* 🔹 todos con mismo ancho */
+    align-items: stretch;
 }
 
-/* Formularios dentro del contenedor */
 .acciones-botones form {
-    width: 100%;              /* 🔹 asegura que el <button> no se achique */
+    width: 100%;
     margin: 0;
 }
-
-
 
 /* Variantes */
 .btn.azul { background: #007bff; color: white; }
@@ -160,14 +168,18 @@ h1 {
 .btn.amarillo { background: #ffc107; color: black; }
 .btn.gris { background: #6c757d; color: white; }
 
-
-.exportacion-global{
+/* ==============================
+   Botones exportación
+============================== */
+.exportacion-global {
     display: flex;
     flex-direction: row;
     justify-content: space-evenly;
     max-width: 80%;
-    gap: 20px;  
+    gap: 20px;
+    margin: 20px auto;
 }
+
 /* ==============================
    Tablas
 ============================== */
@@ -175,16 +187,12 @@ table {
     margin: auto;
     border-collapse: collapse;
     border-radius: 6px;
-    overflow: hidden; /* bordes redondeados */
+    overflow: hidden;
     box-shadow: 0 0 8px rgba(0,0,0,0.1);
 }
 
 th, td {
-    /*display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;*/
     width: 15%;
-    border-collapse: collapse;
     margin: auto;
     padding: 10px;
     border-bottom: 1px solid #ddd;
@@ -203,4 +211,64 @@ tr:nth-child(even) {
 
 tr:hover {
     background-color: #f1f1f1;
+}
+
+
+/* ==============================
+   Scroll horizontal en tablas anchas
+============================== */
+.tabla-scroll {
+    width: 100%;
+    overflow-x: auto;   /* activa la barra horizontal */
+    margin-bottom: 15px;
+}
+
+.tabla-scroll table {
+    min-width: 800px;   /* asegura que las columnas tengan espacio */
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.tabla-scroll th,
+.tabla-scroll td {
+    padding: 8px;
+    border: 1px solid #ccc;
+    text-align: left;
+    white-space: nowrap;  /* evita que los textos se partan */
+}
+
+
+/* ==============================
+   Adaptabilidad
+============================== */
+@media (max-width: 768px) {
+    .nav-botones {
+        flex-wrap: wrap;
+    }
+
+    .nav-botones a,
+    .nav-botones button {
+        flex: 1 1 100%;
+        max-width: 100%;
+    }
+
+    .nav-fecha {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .nav-fecha input,
+    .nav-fecha button {
+        width: 100%;
+    }
+
+    .carga-archivos form div {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .carga-archivos label {
+        text-align: left;
+        min-width: auto;
+    }
 }
