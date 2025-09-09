@@ -4,13 +4,15 @@
 <h1>⚙️ Configuración de Validaciones (Insumo 1)</h1>
 
 <p>
-    Aquí puedes definir las <b>etiquetas</b> y <b>criterios de columnas</b> que usarán los filtros 
-    para generar los valores en la columna <b>ANÁLISIS VALIDACIONES</b> del archivo maestro.
+    Aquí puedes definir las <b>etiquetas</b>, las <b>columnas objetivo</b>, 
+    el <b>operador de comparación</b> y el <b>valor esperado</b>.  
+    Estas reglas se aplicarán dinámicamente para generar la columna 
+    <b>ANÁLISIS VALIDACIONES</b> del archivo maestro.
 </p>
 
 <!-- =============================
      Formulario dinámico de reglas
-============================== -->
+=============================== -->
 <form action="{{ url_for('guardar_configuracion_general') }}" method="POST">
     
     <!-- Contenedor con scroll lateral -->
@@ -19,7 +21,8 @@
             <thead>
                 <tr>
                     <th>Etiqueta / Resultado</th>
-                    <th>Criterio de Columna</th>
+                    <th>Columna objetivo</th>
+                    <th>Operador</th>
                     <th>Valor esperado</th>
                     <th>Acción</th>
                 </tr>
@@ -27,19 +30,69 @@
             <tbody id="tabla-config">
                 {% for regla in reglas %}
                 <tr>
-                    <td><input type="text" name="etiquetas[]" value="{{ regla.etiqueta }}" required></td>
-                    <td><input type="text" name="columnas[]" value="{{ regla.columna }}" required></td>
-                    <td><input type="text" name="valores[]" value="{{ regla.valor }}" required></td>
-                    <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
+                    <!-- Etiqueta personalizada -->
+                    <td>
+                        <input type="text" name="etiquetas[]" 
+                               value="{{ regla.etiqueta }}" 
+                               placeholder="Ej: SIN ANTIVIRUS"
+                               required>
+                    </td>
+
+                    <!-- Columna objetivo -->
+                    <td>
+                        <input type="text" name="columnas[]" 
+                               value="{{ regla.columna }}" 
+                               placeholder="Ej: Antivirus"
+                               required>
+                    </td>
+
+                    <!-- Operador -->
+                    <td>
+                        <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
+                            <option value="=" {% if regla.operador == "=" %}selected{% endif %}>=</option>
+                            <option value="!=" {% if regla.operador == "!=" %}selected{% endif %}>≠</option>
+                            <option value="contiene" {% if regla.operador == "contiene" %}selected{% endif %}>Contiene</option>
+                            <option value="no_contiene" {% if regla.operador == "no_contiene" %}selected{% endif %}>No contiene</option>
+                            <option value=">" {% if regla.operador == ">" %}selected{% endif %}>&gt;</option>
+                            <option value="<" {% if regla.operador == "<" %}selected{% endif %}>&lt;</option>
+                            <option value="es_vacio" {% if regla.operador == "es_vacio" %}selected{% endif %}>Está vacío</option>
+                            <option value="no_vacio" {% if regla.operador == "no_vacio" %}selected{% endif %}>No está vacío</option>
+                        </select>
+                    </td>
+
+                    <!-- Valor esperado -->
+                    <td>
+                        <input type="text" name="valores[]" 
+                               value="{{ regla.valor }}" 
+                               placeholder="Ej: No instalado">
+                    </td>
+
+                    <!-- Botón eliminar fila -->
+                    <td style="text-align: center;">
+                        <button type="button" class="btn rojo" onclick="eliminarFilaValidacion(this)">❌</button>
+                    </td>
                 </tr>
                 {% endfor %}
 
                 {% if reglas|length == 0 %}
+                <!-- Fila inicial si no hay reglas guardadas -->
                 <tr>
                     <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
                     <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
-                    <td><input type="text" name="valores[]" placeholder="Ej: No instalado" required></td>
-                    <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
+                    <td>
+                        <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
+                            <option value="=">=</option>
+                            <option value="!=">≠</option>
+                            <option value="contiene">Contiene</option>
+                            <option value="no_contiene">No contiene</option>
+                            <option value=">">&gt;</option>
+                            <option value="<">&lt;</option>
+                            <option value="es_vacio">Está vacío</option>
+                            <option value="no_vacio">No está vacío</option>
+                        </select>
+                    </td>
+                    <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
+                    <td><button type="button" class="btn rojo" onclick="eliminarFilaValidacion(this)">❌</button></td>
                 </tr>
                 {% endif %}
             </tbody>
@@ -48,35 +101,9 @@
 
     <!-- Botones -->
     <div style="margin-top: 15px; text-align: center;">
-        <button type="button" class="btn amarillo" onclick="agregarFila()">➕ Agregar regla</button>
+        <button type="button" class="btn amarillo" onclick="agregarFilaValidacion()">➕ Agregar regla</button>
         <button type="submit" class="btn verde">💾 Guardar configuración</button>
         <a href="{{ url_for('index') }}" class="btn gris">🏠 Volver al inicio</a>
     </div>
 </form>
-
-<!-- =============================
-     Scripts dinámicos
-============================== -->
-<script>
-function agregarFila() {
-    let tbody = document.getElementById("tabla-config");
-    let fila = document.createElement("tr");
-    fila.innerHTML = `
-        <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
-        <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
-        <td><input type="text" name="valores[]" placeholder="Ej: No instalado" required></td>
-        <td><button type="button" class="btn rojo" onclick="eliminarFila(this)">❌</button></td>
-    `;
-    tbody.appendChild(fila);
-}
-
-function eliminarFila(boton) {
-    let tbody = document.getElementById("tabla-config");
-    if (tbody.rows.length > 1) {
-        boton.closest("tr").remove();
-    } else {
-        alert("Debe existir al menos una regla configurada.");
-    }
-}
-</script>
 {% endblock %}

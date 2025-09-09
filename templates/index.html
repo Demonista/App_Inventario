@@ -96,5 +96,15 @@
 <section class="exportacion-global">
     <a href="{{ url_for('exportar_excel') }}" class="btn verde btn-small">📤 Exportar Excel</a>
     <a href="{{ url_for('exportar_pdf') }}" class="btn rojo btn-small">📄 Exportar PDF</a>
+
+<!-- ============================= -->
+<!-- Botón para aplicar validaciones -->
+<!-- ============================= -->
+    <form action="{{ url_for('aplicar_validaciones') }}" method="post" style="display:inline;">
+        <button type="submit" class="btn gris btn-small">
+            <i class="fas fa-check-circle"></i> Aplicar Validaciones
+        </button>
+    </form>
+
 </section>
 {% endblock %}

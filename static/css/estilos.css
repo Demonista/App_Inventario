@@ -219,24 +219,108 @@ tr:hover {
 ============================== */
 .tabla-scroll {
     width: 100%;
-    overflow-x: auto;   /* activa la barra horizontal */
+    overflow-x: auto;             /* activa la barra horizontal */
     margin-bottom: 15px;
+    -webkit-overflow-scrolling: touch;  /* scroll fluido en móviles */
 }
 
 .tabla-scroll table {
-    min-width: 800px;   /* asegura que las columnas tengan espacio */
+    min-width: 900px;             /* un poco más de espacio mínimo */
     border-collapse: collapse;
     width: 100%;
 }
 
 .tabla-scroll th,
 .tabla-scroll td {
-    padding: 8px;
+    padding: 8px 12px;
     border: 1px solid #ccc;
     text-align: left;
-    white-space: nowrap;  /* evita que los textos se partan */
+    white-space: nowrap;          /* evita quiebres en textos largos */
 }
 
+/* Scrollbar personalizado (solo visible en desktop) */
+.tabla-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+.tabla-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.tabla-scroll::-webkit-scrollbar-thumb {
+    background: #007bff;
+    border-radius: 4px;
+}
+.tabla-scroll::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}
+
+
+/* ==============================
+   Filtros dinámicos (configuración general)
+============================== */
+.filtros-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+/* Cada condición */
+.filtro-bloque {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+/* Inputs y selects dentro del bloque */
+.filtro-bloque select,
+.filtro-bloque input[type="text"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 140px;
+}
+
+/* Botones de acción en el bloque */
+.filtro-acciones {
+    display: flex;
+    gap: 6px;
+}
+
+.filtro-acciones .btn {
+    width: auto;
+    padding: 5px 10px;
+}
+
+/* Agrupaciones AND/OR */
+.filtro-grupo {
+    border: 2px dashed #007bff;
+    padding: 12px;
+    margin: 12px 0;
+    border-radius: 6px;
+}
+
+.filtro-operador {
+    font-weight: bold;
+    color: #007bff;
+    margin-bottom: 8px;
+}
+
+/* Etiqueta de vista previa */
+.etiqueta-preview {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-weight: bold;
+    background: #6f42c1;
+    color: white;
+    margin-top: 5px;
+}
 
 /* ==============================
    Adaptabilidad
@@ -270,5 +354,19 @@ tr:hover {
     .carga-archivos label {
         text-align: left;
         min-width: auto;
+    }
+
+    .filtro-bloque {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filtro-bloque select,
+    .filtro-bloque input {
+        width: 100%;
+    }
+
+    .filtro-acciones {
+        justify-content: flex-end;
     }
 }
