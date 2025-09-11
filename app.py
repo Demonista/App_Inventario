@@ -7,21 +7,25 @@ Incluye:
 - Integración al inventario maestro según tipo de insumo
 - Historial y configuración persistidos en JSON
 - Exportación de inventario a Excel y PDF
+- Validaciones dinámicas sobre la hoja "General"
 """
 
 import os
+import re
 import json
-from datetime import datetime, date
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash
 import pandas as pd
+from datetime import datetime, date, date as date_type
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-# Para manipular el maestro por hoja/columnas sin perder fórmulas
+# openpyxl para manipular el maestro por hoja/columnas sin perder fórmulas
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
-# --- Configuración inicial ---
+# ----------------------------
+# Configuración inicial
+# ----------------------------
 app = Flask(__name__)
 app.secret_key = "clave_secreta"  # Necesario para flash messages
 
@@ -32,16 +36,13 @@ os.makedirs(DATA_FOLDER, exist_ok=True)
 
 ARCHIVOS_JSON = os.path.join(DATA_FOLDER, "archivos.json")
 CONFIG_JSON = os.path.join(DATA_FOLDER, "config.json")
-
-# Archivo maestro (base del proveedor)
 MAESTRO_FILE = os.path.join(DATA_FOLDER, "inventario_maestro.xlsx")
 
-
-# =============================
+# ----------------------------
 # Utilidades JSON
-# =============================
+# ----------------------------
 def cargar_json(ruta, default):
-    """Carga un JSON o retorna un valor por defecto si no existe/corrupción"""
+    """Carga un JSON o retorna un valor por defecto si no existe o hay error."""
     if os.path.exists(ruta):
         try:
             with open(ruta, "r", encoding="utf-8") as f:
@@ -52,51 +53,45 @@ def cargar_json(ruta, default):
 
 
 def guardar_json(ruta, data):
-    """Guarda un JSON de forma segura"""
+    """Guarda un JSON de forma segura con indentación."""
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# Inicialización
+# Inicialización de archivos auxiliares
 archivos = cargar_json(ARCHIVOS_JSON, [])
-# Estructura de config por defecto compatible con tus plantillas
 config = cargar_json(
     CONFIG_JSON,
     {
         "autor": "Sistema",
         "version": "1.0",
-        "usuarios": [],                 # lista de dicts: {"nombre","correo","activo"}
-        "validaciones": []              # lista de reglas: {"etiqueta","columna","operador","valor"}
+        "usuarios": [],        # lista de dicts: {"nombre","correo","activo"}
+        "validaciones": []     # lista de reglas: {"etiqueta","columna","operador","valor"}
     }
 )
 
-
-# =============================
-# Utilidades de Excel (openpyxl)
-# =============================
+# ----------------------------
+# Utilidades Excel (openpyxl)
+# ----------------------------
 def _ensure_sheet(wb, sheet_name):
-    """Devuelve una hoja por nombre; si no existe, la crea al final."""
+    """Devuelve una hoja por nombre; si no existe, la crea."""
     if sheet_name in wb.sheetnames:
         return wb[sheet_name]
     return wb.create_sheet(title=sheet_name)
 
 
 def _headers_from_sheet(ws, header_row=1):
-    """
-    Devuelve un dict {nombre_columna_normalizado: index_columna_1based}
-    leyendo la fila de encabezado. Normaliza espacios y case.
-    """
+    """Devuelve dict {columna_normalizada: índice_columna} a partir de la fila de encabezados."""
     headers = {}
     for col_idx, cell in enumerate(ws[header_row], start=1):
         name = str(cell.value).strip() if cell.value is not None else ""
-        key = name.lower().strip()
-        if key:
-            headers[key] = col_idx
+        if name:
+            headers[name.lower().strip()] = col_idx
     return headers
 
 
 def _normalize_series(iterable):
-    """Convierte los valores a str normalizados (para comparar headers)."""
+    """Convierte nombres de columnas a versión normalizada para comparación."""
     return [str(x).strip().lower() for x in iterable]
 
 
@@ -104,56 +99,41 @@ def update_sheet_by_headers(wb, sheet_name, df, preserve_columns=None):
     """
     Actualiza una hoja usando nombres de columna como referencia.
     - Crea la hoja si no existe.
-    - Lee encabezados existentes y solo escribe en las columnas que coinciden por nombre.
-    - Si 'preserve_columns' (set de nombres normalizados) está definido,
-      NO toca esas columnas (ni encabezado ni celdas).
-    - Limpia datos previos (desde fila 2) en las columnas que va a escribir.
-    - Escribe desde fila 2 hacia abajo.
+    - Mantiene las columnas en preserve_columns.
+    - Limpia datos previos en columnas que se van a sobrescribir.
     """
     if preserve_columns is None:
         preserve_columns = set()
 
     ws = _ensure_sheet(wb, sheet_name)
-
-    # map headers existentes en la hoja
-    existing_headers = _headers_from_sheet(ws, header_row=1)
-
-    # map headers del df
+    existing_headers = _headers_from_sheet(ws)
     df_headers_norm = _normalize_series(df.columns)
 
-    # Calcular columnas comunes (por nombre normalizado)
+    # columnas comunes entre hoja y df
     common = []
     for i, col_name in enumerate(df.columns):
         key = str(col_name).strip().lower()
         if key in existing_headers and key not in preserve_columns:
             common.append((i, key, existing_headers[key]))
 
-    # Si no hay encabezados comunes, intentamos escribir encabezados del df (sin romper preservadas)
+    # si no hay encabezados en la hoja, inicializar con los del df
     if not existing_headers:
-        # Escribimos encabezados del df en la fila 1, respetando preserve_columns (por nombre)
         for j, col_name in enumerate(df.columns, start=1):
             key = str(col_name).strip().lower()
-            if key in preserve_columns:
-                continue  # no sobrescribir encabezados preservados
-            ws.cell(row=1, column=j, value=str(col_name))
-        # recalcular headers
-        existing_headers = _headers_from_sheet(ws, header_row=1)
-        # volver a armar common
-        common = []
-        for i, col_name in enumerate(df.columns):
-            key = str(col_name).strip().lower()
-            if key in existing_headers and key not in preserve_columns:
-                common.append((i, key, existing_headers[key]))
+            if key not in preserve_columns:
+                ws.cell(row=1, column=j, value=str(col_name))
+        existing_headers = _headers_from_sheet(ws)
+        common = [(i, col.lower(), existing_headers[col.lower()])
+                  for i, col in enumerate(df.columns) if col.lower() in existing_headers]
 
-    # Limpiar contenido previo desde fila 2 SOLO en las columnas que vamos a escribir
-    max_row = ws.max_row
+    # limpiar contenido previo desde fila 2
     for _, _, col_idx in common:
-        for r in range(2, max_row + 1):
+        for r in range(2, ws.max_row + 1):
             ws.cell(row=r, column=col_idx, value=None)
 
-    # Escribir datos (fila 2 en adelante) en columnas mapeadas
+    # escribir datos nuevos
     for df_row_idx, (_, row) in enumerate(df.iterrows(), start=2):
-        for i_df, key, col_idx in common:
+        for i_df, _, col_idx in common:
             value = row.iloc[i_df]
             ws.cell(row=df_row_idx, column=col_idx, value=None if pd.isna(value) else value)
 
@@ -161,21 +141,17 @@ def update_sheet_by_headers(wb, sheet_name, df, preserve_columns=None):
 
 
 def replace_sheet_content(wb, sheet_name, df):
-    """
-    Reemplaza el contenido de una hoja por completo (encabezados + datos).
-    Se usa cuando se puede sobrescribir sin riesgo.
-    """
+    """Reemplaza una hoja completa (encabezados y datos)."""
     ws = _ensure_sheet(wb, sheet_name)
-    # Borrar todo
     for row in ws.iter_rows():
         for cell in row:
             cell.value = None
 
-    # Escribir encabezados
+    # escribir encabezados
     for j, col in enumerate(df.columns, start=1):
         ws.cell(row=1, column=j, value=str(col))
 
-    # Escribir datos
+    # escribir filas
     for i, (_, row) in enumerate(df.iterrows(), start=2):
         for j, val in enumerate(row, start=1):
             ws.cell(row=i, column=j, value=None if pd.isna(val) else val)
@@ -185,48 +161,41 @@ def replace_sheet_content(wb, sheet_name, df):
 
 def update_estado_gen_usuario(wb, df, tipo_evento):
     """
-    Actualiza la hoja ESTADO_GEN_USUARIO con base en df de Talento humano.
-    - Busca por CEDULA (str/int).
-    - Si existe: actualiza NOMBRE, ÁREA y ESTADO según 'tipo_evento'.
-    - Si no existe: crea fila.
-    - La columna INGRESO/RETIRO se toma del df si existe, si no usa la fecha actual (dd-mm-YYYY).
-    - ESTADO = "ACTIVO {DEP}" para ingresos/actualización si hay dependencia; "RETIRADO {DEP}" para retiros.
-      (Si no hay dependencia, se deja "ACTIVO" o "RETIRADO" a secas).
-    Columnas objetivo (si existen en el maestro):
-        "CEDULA", "NOMBRE", "ÁREA", "ESTADO", "INGRESO/RETIRO"
+    Actualiza la hoja ESTADO_GEN_USUARIO con base en Talento humano (ingresos/retiros/actualización).
     """
     SHEET = "ESTADO_GEN_USUARIO"
     ws = _ensure_sheet(wb, SHEET)
+    headers = _headers_from_sheet(ws)
 
-    headers = _headers_from_sheet(ws, header_row=1)
-    # Mapeos por nombre normalizado
+    # helper: obtener índice de columna
     def col_idx(colname):
         return headers.get(colname.lower().strip())
 
     idx_ced = col_idx("cedula")
     idx_nom = col_idx("nombre")
-    idx_area = col_idx("área") or col_idx("area")  # por si acaso sin tilde
+    idx_area = col_idx("área") or col_idx("area")
     idx_estado = col_idx("estado")
     idx_fecha = col_idx("ingreso/retiro") or col_idx("ingreso_retiro")
 
-    # Si la hoja estuviera vacía, la inicializamos con encabezados estándar
+    # inicializar encabezados si no existen
     if not headers:
         base_cols = ["CEDULA", "NOMBRE", "ÁREA", "ESTADO", "INGRESO/RETIRO"]
         for j, name in enumerate(base_cols, start=1):
             ws.cell(row=1, column=j, value=name)
-        headers = _headers_from_sheet(ws, header_row=1)
-        idx_ced = headers.get("cedula")
-        idx_nom = headers.get("nombre")
-        idx_area = headers.get("área") or headers.get("area")
-        idx_estado = headers.get("estado")
-        idx_fecha = headers.get("ingreso/retiro") or headers.get("ingreso_retiro")
+        headers = _headers_from_sheet(ws)
+        idx_ced, idx_nom, idx_area, idx_estado, idx_fecha = (
+            headers.get("cedula"),
+            headers.get("nombre"),
+            headers.get("área") or headers.get("area"),
+            headers.get("estado"),
+            headers.get("ingreso/retiro") or headers.get("ingreso_retiro"),
+        )
 
-    # Índices de columnas en el df de talento humano (flexibles por nombre)
     df_cols = _normalize_series(df.columns)
 
-    def get_df_val(row, name_candidates):
-        """Devuelve el valor de row por primera columna coincidente (normalizada)."""
-        for name in name_candidates:
+    def get_df_val(row, candidates):
+        """Devuelve valor desde df según la primera coincidencia en candidates."""
+        for name in candidates:
             try:
                 pos = df_cols.index(name.lower().strip())
                 return row.iloc[pos]
@@ -234,11 +203,10 @@ def update_estado_gen_usuario(wb, df, tipo_evento):
                 continue
         return None
 
-    # Cargar índice de CEDULA existente en hoja para búsquedas rápidas
     cedula_to_row = {}
     for r in range(2, ws.max_row + 1):
         ced_val = ws.cell(row=r, column=idx_ced).value if idx_ced else None
-        if ced_val is not None and str(ced_val).strip():
+        if ced_val:
             cedula_to_row[str(ced_val).strip()] = r
 
     hoy_str = date.today().strftime("%d-%m-%Y")
@@ -249,14 +217,11 @@ def update_estado_gen_usuario(wb, df, tipo_evento):
         area = get_df_val(row, ["área", "area", "dependencia", "gerencia"])
         fecha_insumo = get_df_val(row, ["ingreso/retiro", "fecha", "fecha evento"])
 
-        # Normalizar cedula a str
-        if pd.isna(ced) or str(ced).strip() == "":
-            # si no hay cédula válida, saltamos
+        if not ced or str(ced).strip() == "":
             continue
         ced_str = str(ced).strip()
 
-        # construir ESTADO según tipo
-        dep_str = str(area).strip() if area is not None and str(area).strip() else ""
+        dep_str = str(area).strip() if area else ""
         if tipo_evento == "personal_retiros":
             estado_final = f"RETIRADO {dep_str}".strip()
         elif tipo_evento in ("personal_ingresos", "personal_actualizacion"):
@@ -264,22 +229,19 @@ def update_estado_gen_usuario(wb, df, tipo_evento):
         else:
             estado_final = str(get_df_val(row, ["estado"])) if get_df_val(row, ["estado"]) else ""
 
-        # fecha final
         fecha_final = (
             str(fecha_insumo).strip()
-            if (fecha_insumo is not None and str(fecha_insumo).strip())
+            if fecha_insumo and str(fecha_insumo).strip()
             else hoy_str
         )
 
         if ced_str in cedula_to_row:
-            # Actualizar fila existente
             r = cedula_to_row[ced_str]
             if idx_nom: ws.cell(row=r, column=idx_nom, value=None if pd.isna(nom) else nom)
             if idx_area: ws.cell(row=r, column=idx_area, value=None if pd.isna(area) else area)
             if idx_estado: ws.cell(row=r, column=idx_estado, value=estado_final)
             if idx_fecha: ws.cell(row=r, column=idx_fecha, value=fecha_final)
         else:
-            # Crear nueva fila
             r = ws.max_row + 1
             if idx_ced: ws.cell(row=r, column=idx_ced, value=ced_str)
             if idx_nom: ws.cell(row=r, column=idx_nom, value=None if pd.isna(nom) else nom)
@@ -289,15 +251,11 @@ def update_estado_gen_usuario(wb, df, tipo_evento):
 
     return ws
 
-import re
-from datetime import datetime, date as date_type
-
 # ----------------------------
-# VALIDACIONES DINÁMICAS (HOJA "General")
+# Validaciones dinámicas (hoja "General")
 # ----------------------------
-
 def parse_date_like(value):
-    """Intenta convertir value a objeto date (date_type). Devuelve None si no es parseable."""
+    """Convierte value en date si es posible."""
     if value is None:
         return None
     if isinstance(value, (datetime, date_type)):
@@ -305,175 +263,148 @@ def parse_date_like(value):
     s = str(value).strip()
     if not s:
         return None
-    # intentos de parseo comunes
-    patterns = [
-        "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d",
-        "%d.%m.%Y", "%Y.%m.%d"
-    ]
-    # intento ISO / fromisoformat
+    patterns = ["%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y", "%Y.%m.%d"]
     try:
-        dt = datetime.fromisoformat(s)
-        return dt.date()
+        return datetime.fromisoformat(s).date()
     except Exception:
         pass
     for p in patterns:
         try:
-            dt = datetime.strptime(s, p)
-            return dt.date()
+            return datetime.strptime(s, p).date()
         except Exception:
             continue
-    # intento heurístico (números como Excel timestamp no soportado aquí)
     return None
 
+
 def is_number_like(v):
+    """Verifica si v puede convertirse en número."""
     try:
-        if v is None: return False
         float(v)
         return True
     except Exception:
         return False
 
+
 def eval_rule(cell_value, operador, valor):
     """
-    Evalúa una sola regla contra cell_value.
-    operador: string (ejemplo: '=', '!=', 'contiene', 'no contiene', '>', '<', '>=', '<=', 'regex', 'dias_mayor_que', 'empty', 'not_empty')
-    valor: string (valor esperado según operador)
-    Retorna True/False
+    Evalúa una regla sobre cell_value.
+    Operadores soportados: =, !=, contiene, regex, >, <, >=, <=, dias_mayor_que, empty, not_empty.
     """
     operador = (operador or "").strip().lower()
     raw = cell_value
 
-    # casuística emptiness
     if operador in ("empty", "es_vacio", "vacío", "vacio"):
         return raw is None or (isinstance(raw, str) and raw.strip() == "")
-    if operador in ("not_empty", "no_vacio", "no vacío", "no_vacio"):
+    if operador in ("not_empty", "no_vacio", "no vacío"):
         return not (raw is None or (isinstance(raw, str) and raw.strip() == ""))
 
-    # Normalizar a string para ciertos operadores
     cell_str = "" if raw is None else str(raw).strip()
     valor_str = "" if valor is None else str(valor).strip()
 
-    # Igual / distinto (intenta comparación numérica si ambos son números)
     if operador in ("=", "==", "igual", "equals"):
         if is_number_like(cell_str) and is_number_like(valor_str):
             return float(cell_str) == float(valor_str)
         return cell_str == valor_str
-
     if operador in ("!=", "diferente", "not equals"):
         if is_number_like(cell_str) and is_number_like(valor_str):
             return float(cell_str) != float(valor_str)
         return cell_str != valor_str
-
-    # Contiene / no contiene
     if operador in ("contiene", "contains"):
         return valor_str.lower() in cell_str.lower()
-    if operador in ("no contiene", "not_contains", "not contains"):
+    if operador in ("no contiene", "not_contains"):
         return valor_str.lower() not in cell_str.lower()
-
-    # Regex
     if operador in ("regex", "re"):
         try:
             return re.search(valor, cell_str, flags=re.IGNORECASE) is not None
         except Exception:
             return False
-
-    # Comparaciones numéricas o de fecha
     if operador in (">", "<", ">=", "<="):
-        # Primero intentamos números
         if is_number_like(cell_str) and is_number_like(valor_str):
-            a = float(cell_str); b = float(valor_str)
-            if operador == ">": return a > b
-            if operador == "<": return a < b
-            if operador == ">=": return a >= b
-            if operador == "<=": return a <= b
-        # Intentamos fechas
+            a, b = float(cell_str), float(valor_str)
+            return eval(f"a {operador} b")
         cell_date = parse_date_like(raw)
         val_date = parse_date_like(valor_str)
         if cell_date and val_date:
-            if operador == ">": return cell_date > val_date
-            if operador == "<": return cell_date < val_date
-            if operador == ">=": return cell_date >= val_date
-            if operador == "<=": return cell_date <= val_date
-        # fallback: comparación lexicográfica
-        if operador == ">": return cell_str > valor_str
-        if operador == "<": return cell_str < valor_str
-        if operador == ">=": return cell_str >= valor_str
-        if operador == "<=": return cell_str <= valor_str
-
-    # Días mayor que: asume cell_value es fecha; valor = número de días (ej: 15)
+            return eval(f"cell_date {operador} val_date")
+        return eval(f"cell_str {operador} valor_str")
     if operador in ("dias_mayor_que", "dias_mayores_que", "days_gt"):
         try:
             dias = int(float(valor_str))
         except Exception:
             return False
         cell_date = parse_date_like(raw)
-        if not cell_date:
-            return False
-        delta = (date_type.today() - cell_date).days
-        return delta > dias
+        return cell_date and (date_type.today() - cell_date).days > dias
 
-    # Si no reconocemos operador, intentar igualdad simple
     return cell_str == valor_str
+
 
 def apply_validations_to_general(wb, reglas):
     """
-    Recorre la hoja 'General' de wb (openpyxl workbook) y aplica las reglas.
-    Cada regla debe ser dict con: 'etiqueta', 'columna', 'operador', 'valor'
-    - Si la columna no existe se ignora la regla para esa fila.
-    - Escribe el resultado (concatenación de etiquetas cumplidas) en 'ANALISIS VALIDACIONES'.
+    Aplica validaciones dinámicas a la hoja 'General'.
+    Escribe resultados en la columna 'ANALISIS VALIDACIONES'.
+    - Cada fila puede acumular múltiples etiquetas separadas por '; '.
+    - Si no hay coincidencias, deja la celda vacía (en vez de 'OK').
     """
     ws = _ensure_sheet(wb, "General")
     headers = _headers_from_sheet(ws, header_row=1)
 
-    # Buscar/crear columna ANALISIS VALIDACIONES (texto exacto, mayúsculas permitidas)
+    # Nombre de columna estándar (se guarda en mayúsculas, se busca en minúsculas normalizado)
     key_name = "analisis validaciones"
+
+    # Buscar la columna, si no existe crearla al final
     col_valid_idx = headers.get(key_name)
     if not col_valid_idx:
         col_valid_idx = ws.max_column + 1
         ws.cell(row=1, column=col_valid_idx, value="ANALISIS VALIDACIONES")
-        # actualizar headers map
         headers = _headers_from_sheet(ws, header_row=1)
 
-    # normalizar reglas: colnames en minúsculas y trimmed
+    # Normalizar las reglas
     reglas_norm = []
     for r in reglas:
-        etiqueta = r.get("etiqueta", "") or ""
-        columna = (r.get("columna", "") or "").strip().lower()
-        operador = (r.get("operador", "") or "").strip().lower()
-        valor = r.get("valor", "") or ""
-        if not etiqueta or not columna:
-            continue
-        reglas_norm.append({
-            "etiqueta": etiqueta.strip(),
-            "columna": columna,
-            "operador": operador,
-            "valor": valor
-        })
+        etiqueta = (r.get("etiqueta") or "").strip()
+        columna = (r.get("columna") or "").strip().lower()
+        operador = (r.get("operador") or "").strip().lower()
+        valor = (r.get("valor") or "").strip()
+        if etiqueta and columna:
+            reglas_norm.append({
+                "etiqueta": etiqueta,
+                "columna": columna,
+                "operador": operador,
+                "valor": valor
+            })
 
-    # Recalcular headers por si se añadió la columna
+    # Recalcular cabeceras para asegurar inclusión de la nueva columna
     headers = _headers_from_sheet(ws, header_row=1)
-
-    # Mapear nombres normalizados a índices (si la hoja usa nombres con tildes, la clave debe ser la normalizada)
     normalized_headers = {k.lower().strip(): v for k, v in headers.items()}
 
-    # Recorrer filas
+    # Recorremos todas las filas de datos
     for r in range(2, ws.max_row + 1):
         etiquetas_fila = []
         for regla in reglas_norm:
-            colname = regla["columna"]
-            idx = normalized_headers.get(colname)
+            idx = normalized_headers.get(regla["columna"])
             if not idx:
-                # Intentar buscar cabecera que contenga la palabra (fuzzy básico)
-                matches = [v for k, v in normalized_headers.items() if colname in k]
+                # Intentar búsqueda flexible (columna contiene texto similar)
+                matches = [v for k, v in normalized_headers.items() if regla["columna"] in k]
                 if matches:
                     idx = matches[0]
                 else:
                     continue
+
             cell_val = ws.cell(row=r, column=idx).value
-            if eval_rule(cell_val, regla["operador"], regla["valor"]):
-                etiquetas_fila.append(regla["etiqueta"])
-        # Escribir resultado (si hay etiquetas, unir con '; ')
-        ws.cell(row=r, column=headers.get(key_name, col_valid_idx), value="; ".join(etiquetas_fila) if etiquetas_fila else None)
+
+            try:
+                if eval_rule(cell_val, regla["operador"], regla["valor"]):
+                    etiquetas_fila.append(regla["etiqueta"])
+            except Exception:
+                # Si la validación lanza error, continuar sin romper
+                continue
+
+        # Escribimos etiquetas concatenadas o vacío
+        ws.cell(
+            row=r,
+            column=headers.get(key_name, col_valid_idx),
+            value="; ".join(etiquetas_fila) if etiquetas_fila else None
+        )
 
     return True
 
@@ -519,41 +450,55 @@ def upload():
     return redirect(url_for("index"))
 
 
+# =============================
+# Integración de insumos en el Maestro
+# =============================
 @app.route("/integrar", methods=["POST"])
 def integrar():
-    """Integra archivo subido en el maestro según tipo de insumo"""
+    """
+    Integra un archivo subido dentro del Maestro según el tipo de insumo.
+    - Si es Maestro: se establece como archivo base.
+    - Si es insumo de soporte: se actualiza o reemplaza la hoja correspondiente.
+    - Aplica validaciones dinámicas si existen reglas guardadas.
+    """
     filename = request.form.get("filename")
     tipo_insumo = request.form.get("tipo_insumo")
 
+    # Validaciones iniciales
     if not filename:
-        flash("Debe seleccionar un archivo para integrar", "error")
+        flash("⚠️ Debe seleccionar un archivo para integrar.", "error")
         return redirect(url_for("index"))
 
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     if not os.path.exists(filepath):
-        flash("El archivo no existe en el servidor", "error")
+        flash("⚠️ El archivo no existe en el servidor.", "error")
         return redirect(url_for("index"))
 
     try:
+        # Cargar insumo a integrar
         df_insumo = pd.read_excel(filepath)
 
-        # === Caso Maestro inicial ===
+        # ============================
+        # Caso 1: Definir Maestro inicial
+        # ============================
         if tipo_insumo == "maestro":
             df_insumo.to_excel(MAESTRO_FILE, index=False)
-            flash(f"El archivo {filename} se estableció como Maestro", "success")
+            flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
+
         else:
-            # === Integrar al Maestro existente ===
+            # ============================
+            # Caso 2: Integración con Maestro existente
+            # ============================
             if not os.path.exists(MAESTRO_FILE):
-                flash("No existe maestro para integrar", "error")
+                flash("⚠️ No existe maestro para integrar.", "error")
                 return redirect(url_for("index"))
 
-            # Cargar workbook con openpyxl (para usar validaciones dinámicas)
             from openpyxl import load_workbook
             wb = load_workbook(MAESTRO_FILE)
 
-            # Dependiendo del tipo de insumo podemos hacer integraciones diferentes
+            # --- Integraciones específicas por tipo ---
             if tipo_insumo == "general":
-                # Actualizar hoja 'General' con datos de soporte
+                # Actualizar hoja 'General' con datos nuevos
                 replace_sheet_content(wb, "General", df_insumo)
 
             elif tipo_insumo == "personal_ingresos":
@@ -566,21 +511,26 @@ def integrar():
                 update_estado_gen_usuario(wb, df_insumo, "personal_actualizacion")
 
             else:
-                # Para otros insumos que no tengan integración especial → hoja con su nombre
+                # Caso genérico: hoja nombrada con el tipo de insumo
                 replace_sheet_content(wb, tipo_insumo.capitalize(), df_insumo)
 
-            # === Aplicar validaciones dinámicas en la hoja "General" ===
+            # ============================
+            # Aplicar validaciones dinámicas
+            # ============================
             try:
-                apply_validations_to_general(wb, config.get("validaciones", []))
+                reglas = config.get("validaciones", [])
+                if reglas:
+                    apply_validations_to_general(wb, reglas)
             except Exception as e:
                 flash(f"⚠️ Error aplicando validaciones dinámicas: {e}", "warning")
 
-            # Guardar cambios
+            # Guardar cambios en el Maestro
             wb.save(MAESTRO_FILE)
 
-        flash(f"Archivo {filename} integrado como {tipo_insumo}", "success")
+        flash(f"✅ Archivo {filename} integrado como {tipo_insumo}.", "success")
+
     except Exception as e:
-        flash(f"Error al integrar: {str(e)}", "error")
+        flash(f"❌ Error al integrar: {str(e)}", "error")
 
     return redirect(url_for("index"))
 
@@ -591,7 +541,16 @@ def integrar():
 def aplicar_validaciones():
     """
     Aplica las reglas configuradas al Maestro en la hoja 'General'.
-    Soporta operadores: =, !=, contiene, no_contiene, >, <.
+
+    Soporta los siguientes operadores:
+    - "="           : Igual a
+    - "!="          : Diferente de
+    - "contiene"    : Contiene texto
+    - "no_contiene" : No contiene texto
+    - ">"           : Mayor que (numérico)
+    - "<"           : Menor que (numérico)
+    - "es_vacio"    : Celda vacía o NaN
+    - "no_vacio"    : Celda con algún valor
     """
     if not os.path.exists(MAESTRO_FILE):
         flash("⚠️ No existe maestro para aplicar validaciones", "error")
@@ -627,6 +586,7 @@ def aplicar_validaciones():
                 if columna not in df_general.columns:
                     continue
 
+                # Valor de la celda, convertido a string si no es NaN
                 celda = str(fila[columna]).strip().lower() if pd.notna(fila[columna]) else ""
 
                 try:
@@ -657,6 +617,14 @@ def aplicar_validaciones():
                         if pd.to_numeric(fila[columna], errors="coerce") < pd.to_numeric(valor, errors="coerce"):
                             resultado.append(etiqueta)
 
+                    elif operador == "es_vacio":
+                        if celda == "" or pd.isna(fila[columna]):
+                            resultado.append(etiqueta)
+
+                    elif operador == "no_vacio":
+                        if celda != "" and pd.notna(fila[columna]):
+                            resultado.append(etiqueta)
+
                 except Exception:
                     # Si la comparación falla (ej: texto en operador >)
                     continue
@@ -677,56 +645,121 @@ def aplicar_validaciones():
 
 
 # =============================
-# Exportaciones
+# Exportaciones (Excel / PDF / Maestro)
 # =============================
 @app.route("/exportar-excel")
 def exportar_excel():
+    """
+    Exporta el archivo maestro completo en formato Excel (.xlsx).
+    """
     if not os.path.exists(MAESTRO_FILE):
-        flash("No hay maestro disponible para exportar", "error")
+        flash("⚠️ No hay maestro disponible para exportar", "error")
         return redirect(url_for("index"))
-    return send_file(MAESTRO_FILE, as_attachment=True, download_name="inventario.xlsx")
+
+    try:
+        # Descarga directa del archivo maestro
+        return send_file(
+            MAESTRO_FILE,
+            as_attachment=True,
+            download_name="inventario.xlsx"
+        )
+    except Exception as e:
+        flash(f"❌ Error al exportar a Excel: {str(e)}", "error")
+        return redirect(url_for("index"))
 
 
 @app.route("/exportar-pdf")
 def exportar_pdf():
+    """
+    Exporta un resumen del maestro en formato PDF.
+    Incluye las primeras 30 filas de la hoja 'General' o, si no existe,
+    de la primera hoja encontrada.
+    """
     if not os.path.exists(MAESTRO_FILE):
-        flash("No hay maestro disponible para exportar", "error")
+        flash("⚠️ No hay maestro disponible para exportar", "error")
         return redirect(url_for("index"))
 
-    df = pd.read_excel(MAESTRO_FILE)
-    pdf_file = os.path.join(DATA_FOLDER, "inventario.pdf")
-    c = canvas.Canvas(pdf_file, pagesize=letter)
-    width, height = letter
+    try:
+        # Leer archivo maestro
+        xl = pd.ExcelFile(MAESTRO_FILE)
+        sheet_name = "General" if "General" in xl.sheet_names else xl.sheet_names[0]
+        df = xl.parse(sheet_name)
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, height - 50, "Inventario Maestro")
+        # Asegurar carpeta destino
+        os.makedirs(DATA_FOLDER, exist_ok=True)
 
-    c.setFont("Helvetica", 10)
-    y = height - 80
-    for _, row in df.head(30).iterrows():
-        line = " | ".join([str(v) for v in row.values])
-        c.drawString(50, y, line[:120])
-        y -= 15
-        if y < 50:
-            c.showPage()
-            y = height - 50
+        # Definir archivo PDF de salida
+        pdf_file = os.path.join(DATA_FOLDER, "inventario.pdf")
+        c = canvas.Canvas(pdf_file, pagesize=letter)
+        width, height = letter
 
-    c.save()
-    return send_file(pdf_file, as_attachment=True, download_name="inventario.pdf")
+        # Encabezado
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, height - 50, f"📦 Inventario Maestro - Hoja: {sheet_name}")
+
+        # Subtítulo con fecha
+        from datetime import datetime
+        c.setFont("Helvetica", 9)
+        c.drawString(50, height - 65, f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+
+        # Contenido del DataFrame (máximo 30 filas)
+        c.setFont("Helvetica", 8)
+        y = height - 90
+        for _, row in df.head(30).iterrows():
+            # Convertir fila en string y truncar para evitar desbordamiento
+            line = " | ".join([str(v) if pd.notna(v) else "" for v in row.values])
+            c.drawString(50, y, line[:150])  # truncar a 150 caracteres
+            y -= 12
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica", 8)
+                y = height - 50
+
+        c.save()
+
+        return send_file(
+            pdf_file,
+            as_attachment=True,
+            download_name="inventario.pdf"
+        )
+
+    except Exception as e:
+        flash(f"❌ Error al exportar a PDF: {str(e)}", "error")
+        return redirect(url_for("index"))
 
 
 @app.route("/download-maestro")
 def download_maestro():
+    """
+    Descarga directa del archivo maestro con un nombre más claro.
+    """
     if not os.path.exists(MAESTRO_FILE):
-        flash("No hay maestro disponible para descargar", "error")
+        flash("⚠️ No hay maestro disponible para descargar", "error")
         return redirect(url_for("index"))
-    return send_file(MAESTRO_FILE, as_attachment=True, download_name="inventario_maestro.xlsx")
+
+    try:
+        return send_file(
+            MAESTRO_FILE,
+            as_attachment=True,
+            download_name="inventario_maestro.xlsx"
+        )
+    except Exception as e:
+        flash(f"❌ Error al descargar el maestro: {str(e)}", "error")
+        return redirect(url_for("index"))
 
 
 @app.route("/historial")
 def historial():
-    historial = cargar_json(ARCHIVOS_JSON, [])
-    return render_template("historial.html", historial=historial)
+    """
+    Muestra el historial de acciones y archivos subidos.
+    Se alimenta desde el JSON de registro.
+    """
+    try:
+        historial = cargar_json(ARCHIVOS_JSON, [])
+        return render_template("historial.html", historial=historial)
+    except Exception as e:
+        flash(f"❌ Error al cargar historial: {str(e)}", "error")
+        return redirect(url_for("index"))
 
 # =============================
 # Configuración de usuarios y sistema
@@ -790,26 +823,36 @@ def configuracion_general():
 @app.route("/guardar_configuracion_general", methods=["POST"])
 def guardar_configuracion_general():
     """
-    Guardar las reglas de validación para la hoja 'General'.
-    Cada regla tiene: etiqueta, columna, operador y valor.
+    Guarda las reglas de validación definidas para la hoja 'General'.
+    Cada regla incluye:
+      - etiqueta: resultado o nombre de la condición
+      - columna: columna objetivo en la hoja General
+      - operador: tipo de comparación (=, !=, contiene, no_contiene, >, <, es_vacio, no_vacio)
+      - valor: valor esperado (puede estar vacío si el operador es 'es_vacio' o 'no_vacio')
     """
     try:
+        # Obtener listas de campos desde el formulario
         etiquetas = request.form.getlist("etiquetas[]")
         columnas = request.form.getlist("columnas[]")
         operadores = request.form.getlist("operadores[]")
         valores = request.form.getlist("valores[]")
 
         reglas = []
-        n = max(len(etiquetas), len(columnas), len(valores), len(operadores))
+        n = max(len(etiquetas), len(columnas), len(operadores), len(valores))
+
         for i in range(n):
             etiqueta = etiquetas[i].strip() if i < len(etiquetas) else ""
             columna = columnas[i].strip() if i < len(columnas) else ""
             operador = operadores[i].strip() if i < len(operadores) else "="
             valor = valores[i].strip() if i < len(valores) else ""
 
+            # Reglas mínimas: etiqueta y columna no deben estar vacías
             if not etiqueta or not columna:
-                # Descarta filas incompletas
                 continue
+
+            # Operadores que no requieren valor
+            if operador in ["es_vacio", "no_vacio"]:
+                valor = ""
 
             reglas.append({
                 "etiqueta": etiqueta,
