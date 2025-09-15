@@ -2,3 +2,5 @@ flask
 openpyxl
 pandas
 reportlab
+gunicorn
+
