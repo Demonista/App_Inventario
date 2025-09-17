@@ -47,14 +47,14 @@ h1 {
 /* Botones principales */
 .nav-botones {
     display: flex;
-    flex-wrap: nowrap;          /* en escritorio siempre fila */
+    flex-wrap: nowrap;
     gap: 10px;
     justify-content: space-between;
 }
 
 .nav-botones a,
 .nav-botones button {
-    flex: 1 1 22%;              /* cada botón ocupa máx 22% */
+    flex: 1 1 22%;
     max-width: 22%;
     min-width: 120px;
     text-align: center;
@@ -128,7 +128,7 @@ h1 {
     border-radius: 5px;
     cursor: pointer;
     display: block;
-    width: 100%;                 /* todos iguales */
+    width: 100%;
     text-align: center;
     text-decoration: none;
     font-weight: bold;
@@ -143,8 +143,8 @@ h1 {
 
 .btn-small {
     font-size: 13px;
-    padding: 6px 14px;
-    min-width: 90px;
+    padding: 4px 10px;
+    min-width: 80px;
 }
 
 /* Contenedor botones tabla */
@@ -193,7 +193,6 @@ table {
 
 th, td {
     width: 15%;
-    margin: auto;
     padding: 10px;
     border-bottom: 1px solid #ddd;
     text-align: center;
@@ -213,19 +212,18 @@ tr:hover {
     background-color: #f1f1f1;
 }
 
-
 /* ==============================
    Scroll horizontal en tablas anchas
 ============================== */
 .tabla-scroll {
     width: 100%;
-    overflow-x: auto;             /* activa la barra horizontal */
+    overflow-x: auto;
     margin-bottom: 15px;
-    -webkit-overflow-scrolling: touch;  /* scroll fluido en móviles */
+    -webkit-overflow-scrolling: touch;
 }
 
 .tabla-scroll table {
-    min-width: 900px;             /* un poco más de espacio mínimo */
+    min-width: 900px;
     border-collapse: collapse;
     width: 100%;
 }
@@ -235,10 +233,11 @@ tr:hover {
     padding: 8px 12px;
     border: 1px solid #ccc;
     text-align: left;
-    white-space: nowrap;          /* evita quiebres en textos largos */
+    white-space: nowrap;
+    word-break: break-word;
 }
 
-/* Scrollbar personalizado (solo visible en desktop) */
+/* Scrollbar personalizado */
 .tabla-scroll::-webkit-scrollbar {
     height: 8px;
 }
@@ -254,7 +253,6 @@ tr:hover {
     background: #0056b3;
 }
 
-
 /* ==============================
    Filtros dinámicos (configuración general)
 ============================== */
@@ -265,7 +263,6 @@ tr:hover {
     margin-top: 20px;
 }
 
-/* Cada condición */
 .filtro-bloque {
     display: flex;
     flex-direction: row;
@@ -277,7 +274,6 @@ tr:hover {
     border-radius: 6px;
 }
 
-/* Inputs y selects dentro del bloque */
 .filtro-bloque select,
 .filtro-bloque input[type="text"] {
     padding: 6px 10px;
@@ -286,7 +282,6 @@ tr:hover {
     min-width: 140px;
 }
 
-/* Botones de acción en el bloque */
 .filtro-acciones {
     display: flex;
     gap: 6px;
@@ -297,7 +292,6 @@ tr:hover {
     padding: 5px 10px;
 }
 
-/* Agrupaciones AND/OR */
 .filtro-grupo {
     border: 2px dashed #007bff;
     padding: 12px;
@@ -311,7 +305,6 @@ tr:hover {
     margin-bottom: 8px;
 }
 
-/* Etiqueta de vista previa */
 .etiqueta-preview {
     display: inline-block;
     padding: 6px 12px;

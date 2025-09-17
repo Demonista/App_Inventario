@@ -337,74 +337,75 @@ def eval_rule(cell_value, operador, valor):
 
     return cell_str == valor_str
 
-
 def apply_validations_to_general(wb, reglas):
     """
-    Aplica validaciones dinámicas a la hoja 'General'.
-    Escribe resultados en la columna 'ANALISIS VALIDACIONES'.
-    - Cada fila puede acumular múltiples etiquetas separadas por '; '.
-    - Si no hay coincidencias, deja la celda vacía (en vez de 'OK').
+    Recorre la hoja 'General' y aplica reglas compuestas.
+    Cada regla: {"etiqueta","logic":"AND"|"OR","conditions":[{"columna","operador","valor"}, ...]}
+    Escribe el resultado (concatenación de etiquetas) en 'ANALISIS VALIDACIONES'.
     """
     ws = _ensure_sheet(wb, "General")
     headers = _headers_from_sheet(ws, header_row=1)
 
-    # Nombre de columna estándar (se guarda en mayúsculas, se busca en minúsculas normalizado)
     key_name = "analisis validaciones"
-
-    # Buscar la columna, si no existe crearla al final
     col_valid_idx = headers.get(key_name)
     if not col_valid_idx:
         col_valid_idx = ws.max_column + 1
         ws.cell(row=1, column=col_valid_idx, value="ANALISIS VALIDACIONES")
         headers = _headers_from_sheet(ws, header_row=1)
 
-    # Normalizar las reglas
+    # mapa normalizado de headers
+    normalized_headers = {k.strip().lower(): v for k, v in headers.items()}
+
+    # normalizar reglas (asegurar estructura esperada)
     reglas_norm = []
     for r in reglas:
         etiqueta = (r.get("etiqueta") or "").strip()
-        columna = (r.get("columna") or "").strip().lower()
-        operador = (r.get("operador") or "").strip().lower()
-        valor = (r.get("valor") or "").strip()
-        if etiqueta and columna:
-            reglas_norm.append({
-                "etiqueta": etiqueta,
-                "columna": columna,
-                "operador": operador,
-                "valor": valor
-            })
+        logic = (r.get("logic") or "AND").strip().upper()
+        if logic not in ("AND", "OR"):
+            logic = "AND"
+        conds = []
+        for c in r.get("conditions", []):
+            col = (c.get("columna") or "").strip().lower()
+            op = (c.get("operador") or "").strip().lower()
+            val = c.get("valor", "")
+            if col:
+                conds.append({"columna": col, "operador": op, "valor": val})
+        if etiqueta and conds:
+            reglas_norm.append({"etiqueta": etiqueta, "logic": logic, "conditions": conds})
 
-    # Recalcular cabeceras para asegurar inclusión de la nueva columna
-    headers = _headers_from_sheet(ws, header_row=1)
-    normalized_headers = {k.lower().strip(): v for k, v in headers.items()}
-
-    # Recorremos todas las filas de datos
-    for r in range(2, ws.max_row + 1):
+    # aplicar fila por fila
+    for row_idx in range(2, ws.max_row + 1):
         etiquetas_fila = []
         for regla in reglas_norm:
-            idx = normalized_headers.get(regla["columna"])
-            if not idx:
-                # Intentar búsqueda flexible (columna contiene texto similar)
-                matches = [v for k, v in normalized_headers.items() if regla["columna"] in k]
-                if matches:
-                    idx = matches[0]
-                else:
+            # evaluar cada condición
+            results = []
+            for cond in regla["conditions"]:
+                colkey = cond["columna"]
+                # index: buscar exacto o fuzzy (like contains)
+                idx = normalized_headers.get(colkey)
+                if not idx:
+                    # fuzzy: buscar cabezera que contenga colkey
+                    matches = [v for k, v in normalized_headers.items() if colkey in k]
+                    idx = matches[0] if matches else None
+                if not idx:
+                    results.append(False)
                     continue
+                cell_val = ws.cell(row=row_idx, column=idx).value
+                ok = eval_rule(cell_val, cond["operador"], cond["valor"])
+                results.append(bool(ok))
 
-            cell_val = ws.cell(row=r, column=idx).value
+            # combinar según logic
+            if regla["logic"] == "AND":
+                cumple = all(results) if results else False
+            else:
+                cumple = any(results) if results else False
 
-            try:
-                if eval_rule(cell_val, regla["operador"], regla["valor"]):
-                    etiquetas_fila.append(regla["etiqueta"])
-            except Exception:
-                # Si la validación lanza error, continuar sin romper
-                continue
+            if cumple:
+                etiquetas_fila.append(regla["etiqueta"])
 
-        # Escribimos etiquetas concatenadas o vacío
-        ws.cell(
-            row=r,
-            column=headers.get(key_name, col_valid_idx),
-            value="; ".join(etiquetas_fila) if etiquetas_fila else None
-        )
+        # escribir en columna ANALISIS VALIDACIONES (usar key exacto)
+        dest_idx = headers.get(key_name) or col_valid_idx
+        ws.cell(row=row_idx, column=dest_idx, value="; ".join(etiquetas_fila) if etiquetas_fila else None)
 
     return True
 
@@ -415,40 +416,65 @@ def apply_validations_to_general(wb, reglas):
 # =============================
 @app.route("/")
 def index():
-    """Página principal con listado de archivos subidos"""
+    """
+    Página principal:
+    - Carga listado de archivos subidos desde archivos.json.
+    - Evita depender de variables globales "archivos" que se pueden desincronizar.
+    """
+    archivos = cargar_json(ARCHIVOS_JSON, [])
+    if not isinstance(archivos, list):
+        archivos = []  # seguridad si el JSON se daña
     return render_template("index.html", archivos=archivos)
 
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    """Subir archivo con tipo de insumo"""
-    if "archivo" not in request.files:
-        flash("No se envió archivo", "error")
+    """
+    Subir uno o varios archivos con su tipo de insumo.
+    - Guarda físicamente los archivos en UPLOAD_FOLDER.
+    - Registra metadatos en archivos.json.
+    - Registra evento en historial.json (registrar_evento).
+    """
+    if "files" not in request.files:
+        flash("⚠️ No se enviaron archivos", "error")
         return redirect(url_for("index"))
 
-    file = request.files["archivo"]
-    tipo = request.form.get("tipo")
-
-    if not file or file.filename == "":
-        flash("Archivo no válido", "error")
+    files = request.files.getlist("files")
+    if not files:
+        flash("⚠️ No se seleccionaron archivos", "error")
         return redirect(url_for("index"))
 
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
+    archivos = cargar_json(ARCHIVOS_JSON, [])
+    if not isinstance(archivos, list):
+        archivos = []
 
-    # Registro
-    nuevo_archivo = {
-        "nombre": file.filename,
-        "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "tipo": tipo,
-        "cargado": True
-    }
-    archivos.append(nuevo_archivo)
+    for file in files:
+        if not file or file.filename.strip() == "":
+            continue
+
+        # Seguridad en el nombre
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+
+        tipo = request.form.get("tipo", "desconocido")
+
+        # Registro en archivos.json
+        nuevo_archivo = {
+            "nombre": filename,
+            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "tipo": tipo,
+            "cargado": True,
+            "ruta": filepath
+        }
+        archivos.append(nuevo_archivo)
+
+        # Registro en historial.json
+        registrar_evento("Subida de archivo", f"{filename} como {tipo}")
+
     guardar_json(ARCHIVOS_JSON, archivos)
-
-    flash(f"Archivo {file.filename} subido como {tipo}", "success")
+    flash("✅ Archivos subidos correctamente", "success")
     return redirect(url_for("index"))
-
 
 # =============================
 # Integración de insumos en el Maestro
@@ -457,14 +483,19 @@ def upload():
 def integrar():
     """
     Integra un archivo subido dentro del Maestro según el tipo de insumo.
-    - Si es Maestro: se establece como archivo base.
+
+    Casos:
+    - Si es Maestro: se establece como archivo base (MAESTRO_FILE).
     - Si es insumo de soporte: se actualiza o reemplaza la hoja correspondiente.
-    - Aplica validaciones dinámicas si existen reglas guardadas.
+    - Aplica validaciones dinámicas si existen reglas guardadas en config.json.
+    - Registra cada integración en el historial.
     """
     filename = request.form.get("filename")
     tipo_insumo = request.form.get("tipo_insumo")
 
+    # ============================
     # Validaciones iniciales
+    # ============================
     if not filename:
         flash("⚠️ Debe seleccionar un archivo para integrar.", "error")
         return redirect(url_for("index"))
@@ -475,15 +506,18 @@ def integrar():
         return redirect(url_for("index"))
 
     try:
+        # ============================
         # Cargar insumo a integrar
-        df_insumo = pd.read_excel(filepath)
+        # ============================
+        df_insumo = pd.read_excel(filepath, engine="openpyxl")
 
         # ============================
         # Caso 1: Definir Maestro inicial
         # ============================
         if tipo_insumo == "maestro":
-            df_insumo.to_excel(MAESTRO_FILE, index=False)
+            df_insumo.to_excel(MAESTRO_FILE, index=False, engine="openpyxl")
             flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
+            registrar_evento("Integración", f"Se estableció {filename} como Maestro")
 
         else:
             # ============================
@@ -498,27 +532,22 @@ def integrar():
 
             # --- Integraciones específicas por tipo ---
             if tipo_insumo == "general":
-                # Actualizar hoja 'General' con datos nuevos
                 replace_sheet_content(wb, "General", df_insumo)
 
-            elif tipo_insumo == "personal_ingresos":
-                update_estado_gen_usuario(wb, df_insumo, "personal_ingresos")
-
-            elif tipo_insumo == "personal_retiros":
-                update_estado_gen_usuario(wb, df_insumo, "personal_retiros")
-
-            elif tipo_insumo == "personal_actualizacion":
-                update_estado_gen_usuario(wb, df_insumo, "personal_actualizacion")
+            elif tipo_insumo in ("personal_ingresos", "personal_retiros", "personal_actualizacion"):
+                update_estado_gen_usuario(wb, df_insumo, tipo_insumo)
 
             else:
                 # Caso genérico: hoja nombrada con el tipo de insumo
-                replace_sheet_content(wb, tipo_insumo.capitalize(), df_insumo)
+                hoja_destino = tipo_insumo.capitalize()
+                replace_sheet_content(wb, hoja_destino, df_insumo)
 
             # ============================
             # Aplicar validaciones dinámicas
             # ============================
             try:
-                reglas = config.get("validaciones", [])
+                config_data = cargar_json(CONFIG_JSON, {})
+                reglas = config_data.get("validaciones", [])
                 if reglas:
                     apply_validations_to_general(wb, reglas)
             except Exception as e:
@@ -526,11 +555,13 @@ def integrar():
 
             # Guardar cambios en el Maestro
             wb.save(MAESTRO_FILE)
+            registrar_evento("Integración", f"{filename} integrado como {tipo_insumo}")
 
         flash(f"✅ Archivo {filename} integrado como {tipo_insumo}.", "success")
 
     except Exception as e:
-        flash(f"❌ Error al integrar: {str(e)}", "error")
+        flash(f"❌ Error al integrar {filename}: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al integrar {filename}: {e}")
 
     return redirect(url_for("index"))
 
@@ -542,7 +573,7 @@ def aplicar_validaciones():
     """
     Aplica las reglas configuradas al Maestro en la hoja 'General'.
 
-    Soporta los siguientes operadores:
+    Operadores soportados:
     - "="           : Igual a
     - "!="          : Diferente de
     - "contiene"    : Contiene texto
@@ -557,8 +588,10 @@ def aplicar_validaciones():
         return redirect(url_for("index"))
 
     try:
-        # Cargar maestro con todas las hojas
-        xl = pd.ExcelFile(MAESTRO_FILE)
+        # ============================
+        # Cargar maestro y hoja General
+        # ============================
+        xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
         if "General" not in xl.sheet_names:
             flash("⚠️ El Maestro no contiene la hoja 'General'", "error")
             return redirect(url_for("index"))
@@ -569,12 +602,18 @@ def aplicar_validaciones():
         if "ANÁLISIS VALIDACIONES" not in df_general.columns:
             df_general["ANÁLISIS VALIDACIONES"] = ""
 
-        reglas = config.get("validaciones", [])
+        # ============================
+        # Cargar reglas desde configuración
+        # ============================
+        config_data = cargar_json(CONFIG_JSON, {})
+        reglas = config_data.get("validaciones", [])
         if not reglas:
             flash("⚠️ No hay reglas de validación configuradas", "warning")
             return redirect(url_for("configuracion_general"))
 
+        # ============================
         # Aplicar reglas a cada fila
+        # ============================
         for idx, fila in df_general.iterrows():
             resultado = []
             for regla in reglas:
@@ -583,66 +622,59 @@ def aplicar_validaciones():
                 valor = regla.get("valor", "")
                 etiqueta = regla.get("etiqueta", "")
 
-                if columna not in df_general.columns:
+                if not columna or columna not in df_general.columns:
                     continue
 
-                # Valor de la celda, convertido a string si no es NaN
+                # Normalizar valor de la celda
                 celda = str(fila[columna]).strip().lower() if pd.notna(fila[columna]) else ""
 
                 try:
-                    # ==========================
-                    # Evaluación de operadores
-                    # ==========================
-                    if operador == "=":
-                        if celda == valor.strip().lower():
-                            resultado.append(etiqueta)
+                    # --- Evaluación de operadores ---
+                    if operador == "=" and celda == valor.strip().lower():
+                        resultado.append(etiqueta)
 
-                    elif operador == "!=":
-                        if celda != valor.strip().lower():
-                            resultado.append(etiqueta)
+                    elif operador == "!=" and celda != valor.strip().lower():
+                        resultado.append(etiqueta)
 
-                    elif operador == "contiene":
-                        if valor.strip().lower() in celda:
-                            resultado.append(etiqueta)
+                    elif operador == "contiene" and valor.strip().lower() in celda:
+                        resultado.append(etiqueta)
 
-                    elif operador == "no_contiene":
-                        if valor.strip().lower() not in celda:
-                            resultado.append(etiqueta)
+                    elif operador == "no_contiene" and valor.strip().lower() not in celda:
+                        resultado.append(etiqueta)
 
-                    elif operador == ">":
-                        if pd.to_numeric(fila[columna], errors="coerce") > pd.to_numeric(valor, errors="coerce"):
-                            resultado.append(etiqueta)
+                    elif operador == ">" and pd.to_numeric(fila[columna], errors="coerce") > pd.to_numeric(valor, errors="coerce"):
+                        resultado.append(etiqueta)
 
-                    elif operador == "<":
-                        if pd.to_numeric(fila[columna], errors="coerce") < pd.to_numeric(valor, errors="coerce"):
-                            resultado.append(etiqueta)
+                    elif operador == "<" and pd.to_numeric(fila[columna], errors="coerce") < pd.to_numeric(valor, errors="coerce"):
+                        resultado.append(etiqueta)
 
-                    elif operador == "es_vacio":
-                        if celda == "" or pd.isna(fila[columna]):
-                            resultado.append(etiqueta)
+                    elif operador == "es_vacio" and (celda == "" or pd.isna(fila[columna])):
+                        resultado.append(etiqueta)
 
-                    elif operador == "no_vacio":
-                        if celda != "" and pd.notna(fila[columna]):
-                            resultado.append(etiqueta)
+                    elif operador == "no_vacio" and (celda != "" and pd.notna(fila[columna])):
+                        resultado.append(etiqueta)
 
                 except Exception:
-                    # Si la comparación falla (ej: texto en operador >)
+                    # Ignorar errores de comparación (ej: texto con operador numérico)
                     continue
 
-            # Guardar etiquetas concatenadas o 'OK'
+            # Guardar etiquetas concatenadas o "OK"
             df_general.at[idx, "ANÁLISIS VALIDACIONES"] = ", ".join(resultado) if resultado else "OK"
 
-        # Reescribir el archivo con la hoja modificada
-        with pd.ExcelWriter(MAESTRO_FILE, mode="a", if_sheet_exists="replace") as writer:
+        # ============================
+        # Guardar cambios en Maestro
+        # ============================
+        with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
             df_general.to_excel(writer, sheet_name="General", index=False)
 
         flash("✅ Validaciones aplicadas correctamente al Maestro", "success")
+        registrar_evento("Validaciones", "Se aplicaron validaciones al Maestro")
 
     except Exception as e:
         flash(f"❌ Error al aplicar validaciones: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al aplicar validaciones: {e}")
 
     return redirect(url_for("index"))
-
 
 # =============================
 # Exportaciones (Excel / PDF / Maestro)
@@ -657,7 +689,7 @@ def exportar_excel():
         return redirect(url_for("index"))
 
     try:
-        # Descarga directa del archivo maestro
+        registrar_evento("Exportación", "Se exportó el Maestro en Excel")
         return send_file(
             MAESTRO_FILE,
             as_attachment=True,
@@ -665,31 +697,30 @@ def exportar_excel():
         )
     except Exception as e:
         flash(f"❌ Error al exportar a Excel: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al exportar Excel: {e}")
         return redirect(url_for("index"))
 
 
 @app.route("/exportar-pdf")
 def exportar_pdf():
     """
-    Exporta un resumen del maestro en formato PDF.
-    Incluye las primeras 30 filas de la hoja 'General' o, si no existe,
-    de la primera hoja encontrada.
+    Exporta un resumen del Maestro en PDF:
+    - Usa la hoja 'General' si existe, de lo contrario la primera hoja.
+    - Incluye como máximo 30 filas.
+    - Registra evento en historial.
     """
     if not os.path.exists(MAESTRO_FILE):
         flash("⚠️ No hay maestro disponible para exportar", "error")
         return redirect(url_for("index"))
 
     try:
-        # Leer archivo maestro
-        xl = pd.ExcelFile(MAESTRO_FILE)
+        xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
         sheet_name = "General" if "General" in xl.sheet_names else xl.sheet_names[0]
         df = xl.parse(sheet_name)
 
-        # Asegurar carpeta destino
         os.makedirs(DATA_FOLDER, exist_ok=True)
-
-        # Definir archivo PDF de salida
         pdf_file = os.path.join(DATA_FOLDER, "inventario.pdf")
+
         c = canvas.Canvas(pdf_file, pagesize=letter)
         width, height = letter
 
@@ -698,17 +729,15 @@ def exportar_pdf():
         c.drawString(50, height - 50, f"📦 Inventario Maestro - Hoja: {sheet_name}")
 
         # Subtítulo con fecha
-        from datetime import datetime
         c.setFont("Helvetica", 9)
         c.drawString(50, height - 65, f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
 
-        # Contenido del DataFrame (máximo 30 filas)
+        # Contenido (máx 30 filas)
         c.setFont("Helvetica", 8)
         y = height - 90
         for _, row in df.head(30).iterrows():
-            # Convertir fila en string y truncar para evitar desbordamiento
             line = " | ".join([str(v) if pd.notna(v) else "" for v in row.values])
-            c.drawString(50, y, line[:150])  # truncar a 150 caracteres
+            c.drawString(50, y, line[:150])  # truncar para no desbordar
             y -= 12
             if y < 50:
                 c.showPage()
@@ -717,48 +746,61 @@ def exportar_pdf():
 
         c.save()
 
-        return send_file(
-            pdf_file,
-            as_attachment=True,
-            download_name="inventario.pdf"
-        )
+        registrar_evento("Exportación", f"Se exportó el Maestro en PDF (hoja: {sheet_name})")
+        return send_file(pdf_file, as_attachment=True, download_name="inventario.pdf")
 
     except Exception as e:
         flash(f"❌ Error al exportar a PDF: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al exportar PDF: {e}")
         return redirect(url_for("index"))
 
 
 @app.route("/download-maestro")
 def download_maestro():
     """
-    Descarga directa del archivo maestro con un nombre más claro.
+    Descarga directa del Maestro en Excel.
     """
     if not os.path.exists(MAESTRO_FILE):
         flash("⚠️ No hay maestro disponible para descargar", "error")
         return redirect(url_for("index"))
 
     try:
+        registrar_evento("Descarga", "Se descargó el Maestro en Excel")
         return send_file(
             MAESTRO_FILE,
             as_attachment=True,
             download_name="inventario_maestro.xlsx"
         )
     except Exception as e:
-        flash(f"❌ Error al descargar el maestro: {str(e)}", "error")
+        flash(f"❌ Error al descargar el Maestro: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al descargar Maestro: {e}")
         return redirect(url_for("index"))
 
 
+# =============================
+# Historial de acciones
+# =============================
 @app.route("/historial")
 def historial():
     """
     Muestra el historial de acciones y archivos subidos.
-    Se alimenta desde el JSON de registro.
+    - Carga eventos desde archivos.json.
+    - Ordena por fecha descendente (recientes primero).
+    - Maneja errores sin romper la app.
     """
     try:
         historial = cargar_json(ARCHIVOS_JSON, [])
+        if not isinstance(historial, list):
+            historial = []
+
+        if historial and all(isinstance(item, dict) and "fecha" in item for item in historial):
+            historial = sorted(historial, key=lambda x: x.get("fecha", ""), reverse=True)
+
         return render_template("historial.html", historial=historial)
+
     except Exception as e:
         flash(f"❌ Error al cargar historial: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al cargar historial: {e}")
         return redirect(url_for("index"))
 
 # =============================
@@ -803,6 +845,20 @@ def guardar_configuracion():
     flash("✅ Configuración general guardada correctamente.", "success")
     return redirect(url_for("configuracion"))
 
+def registrar_evento(accion, detalles="", usuario="Sistema"):
+    """
+    Registra un evento en el historial (archivos.json).
+    """
+    evento = {
+        "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "accion": accion,
+        "usuario": usuario,
+        "detalles": detalles
+    }
+    historial = cargar_json(ARCHIVOS_JSON, [])
+    historial.append(evento)
+    guardar_json(ARCHIVOS_JSON, historial)
+
 
 # =============================
 # Configuración de validaciones Insumo 1
@@ -818,75 +874,101 @@ def configuracion_general():
 
 
 # =============================
-# Guardar reglas de validaciones (Insumo 1)
+# Guardar reglas de validaciones (Insumo 1) - soporte condiciones multiples
 # =============================
 @app.route("/guardar_configuracion_general", methods=["POST"])
 def guardar_configuracion_general():
     """
-    Guarda las reglas de validación definidas para la hoja 'General'.
-    Cada regla incluye:
-      - etiqueta: resultado o nombre de la condición
-      - columna: columna objetivo en la hoja General
-      - operador: tipo de comparación (=, !=, contiene, no_contiene, >, <, es_vacio, no_vacio)
-      - valor: valor esperado (puede estar vacío si el operador es 'es_vacio' o 'no_vacio')
+    Guarda reglas compuestas (varias condiciones por etiqueta).
+    Espera en el form:
+      - etiquetas[]                : nombre/etiqueta por regla (ordenadas)
+      - logic[]                    : "AND" o "OR" por regla (misma longitud)
+      - cond_col_{i}[]             : lista de columnas para la regla i (i = 0,1,2...)
+      - cond_op_{i}[]              : operadores para la regla i
+      - cond_val_{i}[]             : valores para la regla i
     """
     try:
-        # Obtener listas de campos desde el formulario
         etiquetas = request.form.getlist("etiquetas[]")
-        columnas = request.form.getlist("columnas[]")
-        operadores = request.form.getlist("operadores[]")
-        valores = request.form.getlist("valores[]")
+        logics = request.form.getlist("logic[]")  # opcional, default "AND"
 
         reglas = []
-        n = max(len(etiquetas), len(columnas), len(operadores), len(valores))
+        n_rules = len(etiquetas)
+        for i in range(n_rules):
+            etiqueta = (etiquetas[i] or "").strip()
+            logic = (logics[i] or "AND").strip().upper()
 
-        for i in range(n):
-            etiqueta = etiquetas[i].strip() if i < len(etiquetas) else ""
-            columna = columnas[i].strip() if i < len(columnas) else ""
-            operador = operadores[i].strip() if i < len(operadores) else "="
-            valor = valores[i].strip() if i < len(valores) else ""
+            # leer las condiciones para la regla i
+            prefix_col = f"cond_col_{i}[]"
+            prefix_op = f"cond_op_{i}[]"
+            prefix_val = f"cond_val_{i}[]"
 
-            # Reglas mínimas: etiqueta y columna no deben estar vacías
-            if not etiqueta or not columna:
-                continue
+            cols = request.form.getlist(prefix_col)
+            ops = request.form.getlist(prefix_op)
+            vals = request.form.getlist(prefix_val)
 
-            # Operadores que no requieren valor
-            if operador in ["es_vacio", "no_vacio"]:
-                valor = ""
+            conditions = []
+            m = max(len(cols), len(ops), len(vals))
+            for j in range(m):
+                col = cols[j].strip() if j < len(cols) else ""
+                op = ops[j].strip() if j < len(ops) else "="
+                val = vals[j].strip() if j < len(vals) else ""
+                if not col:
+                    continue
+                conditions.append({"columna": col, "operador": op, "valor": val})
 
-            reglas.append({
-                "etiqueta": etiqueta,
-                "columna": columna,
-                "operador": operador,
-                "valor": valor
-            })
+            if etiqueta and conditions:
+                reglas.append({
+                    "etiqueta": etiqueta,
+                    "logic": logic if logic in ("AND", "OR") else "AND",
+                    "conditions": conditions
+                })
 
-        # Guardar en configuración global
+        # Guardar en config y persistir
         config["validaciones"] = reglas
         guardar_json(CONFIG_JSON, config)
-
-        flash("✅ Reglas de validación guardadas correctamente.", "success")
-
+        flash("✅ Reglas compuestas guardadas correctamente.", "success")
     except Exception as e:
-        flash(f"❌ Error al guardar reglas: {str(e)}", "error")
+        flash(f"❌ Error al guardar reglas compuestas: {str(e)}", "error")
 
     return redirect(url_for("configuracion_general"))
 
+    
 # =============================
 # Eliminar archivo subido
 # =============================
 @app.route("/eliminar/<nombre_archivo>")
 def eliminar(nombre_archivo):
-    global archivos
-    archivos = [a for a in archivos if a["nombre"] != nombre_archivo]
-    guardar_json(ARCHIVOS_JSON, archivos)
+    """
+    Elimina un archivo cargado del sistema:
+    - Se borra del JSON de archivos.
+    - Se elimina físicamente del directorio de uploads si existe.
+    - Registra la acción en historial.
+    """
+    try:
+        archivos = cargar_json(ARCHIVOS_JSON, [])
+        if not isinstance(archivos, list):
+            archivos = []
 
-    path = os.path.join(UPLOAD_FOLDER, nombre_archivo)
-    if os.path.exists(path):
-        os.remove(path)
+        # Filtrar lista
+        archivos = [a for a in archivos if a.get("nombre") != nombre_archivo]
+        guardar_json(ARCHIVOS_JSON, archivos)
 
-    flash(f"Archivo {nombre_archivo} eliminado", "success")
+        # Eliminar archivo físico
+        path = os.path.join(UPLOAD_FOLDER, nombre_archivo)
+        if os.path.exists(path):
+            os.remove(path)
+            flash(f"🗑️ Archivo {nombre_archivo} eliminado correctamente", "success")
+            registrar_evento("Eliminación", f"Archivo {nombre_archivo} eliminado del sistema")
+        else:
+            flash(f"⚠️ El archivo {nombre_archivo} no existía en el servidor", "warning")
+            registrar_evento("Advertencia", f"Intento de eliminar {nombre_archivo}, no existía en disco")
+
+    except Exception as e:
+        flash(f"❌ Error al eliminar {nombre_archivo}: {str(e)}", "error")
+        registrar_evento("Error", f"Fallo al eliminar {nombre_archivo}: {e}")
+
     return redirect(url_for("index"))
+
 
 
 # =============================

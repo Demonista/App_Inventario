@@ -4,11 +4,16 @@
 <h1>⚙️ Configuración de Validaciones (Insumo 1)</h1>
 
 <p>
-    Aquí puedes definir las <b>etiquetas</b>, las <b>columnas objetivo</b>, 
-    el <b>operador de comparación</b> y el <b>valor esperado</b>.  
-    Estas reglas se aplicarán dinámicamente para generar la columna 
-    <b>ANÁLISIS VALIDACIONES</b> del archivo maestro.
+    Aquí puedes definir las <b>etiquetas personalizadas</b> que se mostrarán en la columna
+    <b>ANÁLISIS VALIDACIONES</b> del archivo maestro.  
+    Cada regla se compone de:
 </p>
+<ul>
+    <li><b>Etiqueta / Resultado:</b> el texto que aparecerá si la condición se cumple.</li>
+    <li><b>Columna objetivo:</b> el nombre de la columna a evaluar.</li>
+    <li><b>Operador:</b> cómo se evaluará la condición.</li>
+    <li><b>Valor esperado:</b> el valor contra el que se comparará (cuando aplique).</li>
+</ul>
 
 <!-- =============================
      Formulario dinámico de reglas
@@ -64,12 +69,13 @@
                     <td>
                         <input type="text" name="valores[]" 
                                value="{{ regla.valor }}" 
-                               placeholder="Ej: No instalado">
+                               placeholder="Ej: No instalado"
+                               {% if regla.operador in ["es_vacio", "no_vacio"] %}disabled{% endif %}>
                     </td>
 
                     <!-- Botón eliminar fila -->
                     <td style="text-align: center;">
-                        <button type="button" class="btn rojo" onclick="eliminarFilaValidacion(this)">❌</button>
+                        <button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -92,7 +98,7 @@
                         </select>
                     </td>
                     <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
-                    <td><button type="button" class="btn rojo" onclick="eliminarFilaValidacion(this)">❌</button></td>
+                    <td><button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button></td>
                 </tr>
                 {% endif %}
             </tbody>
@@ -106,4 +112,49 @@
         <a href="{{ url_for('index') }}" class="btn gris">🏠 Volver al inicio</a>
     </div>
 </form>
+
+<!-- =============================
+     Scripts para reglas dinámicas
+=============================== -->
+<script>
+function agregarFilaValidacion() {
+    const tbody = document.getElementById("tabla-config");
+    const fila = document.createElement("tr");
+    fila.innerHTML = `
+        <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
+        <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
+        <td>
+            <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
+                <option value="=">=</option>
+                <option value="!=">≠</option>
+                <option value="contiene">Contiene</option>
+                <option value="no_contiene">No contiene</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value="es_vacio">Está vacío</option>
+                <option value="no_vacio">No está vacío</option>
+            </select>
+        </td>
+        <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
+        <td style="text-align: center;"><button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button></td>
+    `;
+    tbody.appendChild(fila);
+}
+
+function eliminarFilaValidacion(boton) {
+    const fila = boton.closest("tr");
+    fila.remove();
+}
+
+function actualizarCampoValor(select) {
+    const valorInput = select.closest("tr").querySelector("input[name='valores[]']");
+    if (select.value === "es_vacio" || select.value === "no_vacio") {
+        valorInput.value = "";
+        valorInput.disabled = true;
+    } else {
+        valorInput.disabled = false;
+    }
+}
+</script>
 {% endblock %}
+

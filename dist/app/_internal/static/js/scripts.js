@@ -6,11 +6,12 @@
 // - Integración de insumos con maestro
 // - Exportación a Excel y PDF
 // - Confirmación de eliminación de archivos
-// - Utilidades para interfaz y mensajes
+// - Dinámica de reglas y validaciones (Insumo 1)
+// - Utilidades generales para interfaz
 // ======================================================
 
 // ------------------------------------------------------
-// Ir al historial, con opción de filtrar por fecha
+// 1. Ir al historial con filtro por fecha
 // ------------------------------------------------------
 function irAlHistorial() {
   const fechaInput = document.getElementById('fecha_consulta');
@@ -24,8 +25,8 @@ function irAlHistorial() {
 }
 
 // ------------------------------------------------------
-// Integrar archivos subidos con el maestro
-// (manda petición POST al backend Flask)
+// 2. Integrar archivos subidos con el maestro
+//    -> Envía POST a Flask
 // ------------------------------------------------------
 function integrarArchivos() {
   if (!confirm("🔗 ¿Deseas integrar todos los insumos al maestro?")) {
@@ -42,7 +43,7 @@ function integrarArchivos() {
     })
     .then(data => {
       alert("✅ Integración completada: " + (data.mensaje || "Proceso finalizado"));
-      location.reload(); // refresca para mostrar resultados actualizados
+      location.reload(); // refresca resultados
     })
     .catch(err => {
       console.error("❌ Error en integración:", err);
@@ -51,7 +52,7 @@ function integrarArchivos() {
 }
 
 // ------------------------------------------------------
-// Exportar inventario a Excel
+// 3. Exportar inventario a Excel
 // ------------------------------------------------------
 function exportarExcel() {
   fetch('/exportar-excel')
@@ -64,12 +65,13 @@ function exportarExcel() {
     })
     .catch(err => {
       console.error("❌ Error en exportación Excel:", err);
-      alert("❌ No se pudo exportar a Excel.");
+      alert("❌ No se pudo exportar a Excel. Intentando descarga directa...");
+      window.open('/exportar-excel', '_blank');
     });
 }
 
 // ------------------------------------------------------
-// Exportar inventario a PDF
+// 4. Exportar inventario a PDF
 // ------------------------------------------------------
 function exportarPDF() {
   fetch('/exportar-pdf')
@@ -82,12 +84,13 @@ function exportarPDF() {
     })
     .catch(err => {
       console.error("❌ Error en exportación PDF:", err);
-      alert("❌ No se pudo exportar a PDF.");
+      alert("❌ No se pudo exportar a PDF. Intentando descarga directa...");
+      window.open('/exportar-pdf', '_blank');
     });
 }
 
 // ------------------------------------------------------
-// Utilidad para descargar archivo desde blob
+// 5. Utilidad genérica para descarga de archivos
 // ------------------------------------------------------
 function descargarArchivo(blob, nombreArchivo) {
   const url = window.URL.createObjectURL(blob);
@@ -101,20 +104,19 @@ function descargarArchivo(blob, nombreArchivo) {
 }
 
 // ------------------------------------------------------
-// Confirmación antes de eliminar archivo
-// (protección contra clics accidentales)
+// 6. Confirmación antes de eliminar archivo
 // ------------------------------------------------------
 function confirmarEliminacion(nombreArchivo) {
   return confirm(`⚠️ ¿Seguro que deseas eliminar el archivo "${nombreArchivo}"?`);
 }
 
 // ------------------------------------------------------
-// Mensaje en consola para depuración
+// 7. Debug en consola (para verificar carga de scripts)
 // ------------------------------------------------------
 console.log("✅ scripts.js cargado correctamente.");
 
 // ------------------------------------------------------
-// Dinámica de configuración de validaciones (Insumo 1)
+// 8. Configuración de validaciones (tabla simple)
 // ------------------------------------------------------
 function agregarFilaValidacion() {
   const tbody = document.getElementById("tabla-config");
@@ -157,9 +159,7 @@ function actualizarCampoValor(select) {
   const fila = select.closest("tr");
   const inputValor = fila.querySelector("input[name='valores[]']");
   
-  // Operadores que NO requieren valor manual
   const operadoresSinValor = ["es_vacio", "no_vacio"];
-
   if (operadoresSinValor.includes(select.value)) {
     inputValor.value = "";
     inputValor.disabled = true;
@@ -170,10 +170,100 @@ function actualizarCampoValor(select) {
   }
 }
 
-// Inicializar al cargar la página (en caso de reglas ya guardadas)
+// Inicializar validaciones al cargar página
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("select[name='operadores[]']").forEach(sel => {
     actualizarCampoValor(sel);
   });
 });
 
+// ------------------------------------------------------
+// 9. Reglas avanzadas (bloques dinámicos con condiciones)
+// ------------------------------------------------------
+let reglaCount = document.querySelectorAll('.regla-block').length || 0;
+
+function agregarRegla() {
+  const container = document.getElementById('reglas-container');
+  const i = reglaCount++;
+  const div = document.createElement('div');
+  div.className = 'regla-block';
+  div.dataset.reglaIndex = i;
+  div.innerHTML = `
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="text" name="etiquetas[]" placeholder="Etiqueta" required>
+      <select name="logic[]">
+        <option value="AND">AND</option>
+        <option value="OR">OR</option>
+      </select>
+      <button type="button" onclick="eliminarRegla(this)">Eliminar regla</button>
+    </div>
+    <table class="cond-table">
+      <thead><tr><th>Columna</th><th>Operador</th><th>Valor</th><th>Acción</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><input type="text" name="cond_col_${i}[]" required></td>
+          <td>
+            <select name="cond_op_${i}[]">
+              <option value="=">=</option>
+              <option value="!=">≠</option>
+              <option value="contiene">Contiene</option>
+              <option value="no_contiene">No contiene</option>
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value="es_vacio">Está vacío</option>
+              <option value="no_vacio">No está vacío</option>
+            </select>
+          </td>
+          <td><input type="text" name="cond_val_${i}[]"></td>
+          <td><button type="button" onclick="eliminarCondicion(this)">❌</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div>
+      <button type="button" onclick="agregarCondicion(${i})">➕ Agregar condición</button>
+    </div>
+    <hr>
+  `;
+  container.appendChild(div);
+}
+
+function eliminarRegla(btn) {
+  const block = btn.closest('.regla-block');
+  if (block) block.remove();
+}
+
+function agregarCondicion(i) {
+  const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
+  if (!block) return;
+  const tbody = block.querySelector('table.cond-table tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" name="cond_col_${i}[]" required></td>
+    <td>
+      <select name="cond_op_${i}[]">
+        <option value="=">=</option>
+        <option value="!=">≠</option>
+        <option value="contiene">Contiene</option>
+        <option value="no_contiene">No contiene</option>
+        <option value=">">&gt;</option>
+        <option value="<">&lt;</option>
+        <option value="es_vacio">Está vacío</option>
+        <option value="no_vacio">No está vacío</option>
+      </select>
+    </td>
+    <td><input type="text" name="cond_val_${i}[]"></td>
+    <td><button type="button" onclick="eliminarCondicion(this)">❌</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function eliminarCondicion(btn) {
+  const tr = btn.closest('tr');
+  if (tr) tr.remove();
+}
+
+// Inicializar contador de reglas si ya existen
+document.addEventListener('DOMContentLoaded', function() {
+  const blocks = document.querySelectorAll('.regla-block');
+  reglaCount = blocks.length;
+});

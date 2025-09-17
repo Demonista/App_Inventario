@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title or "Inventario de Escritorio VTI" }}</title>
+    <meta name="description" content="Aplicación de escritorio para gestión de inventario con integración de insumos, exportación y validaciones dinámicas.">
     
     <!-- Estilos -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+    
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Code+Pro&display=swap" rel="stylesheet">
 </head>
@@ -22,15 +24,14 @@
                 <a href="{{ url_for('index') }}" class="btn azul" title="Ir a Inicio">🏠 Inicio</a>
                 <a href="{{ url_for('historial') }}" class="btn morado" title="Ver historial de procesos">📑 Historial</a>
                 <a href="{{ url_for('configuracion_general') }}" class="btn verde" title="Configurar validaciones del Insumo 1">🛠️ Validaciones</a>
-                <a href="{{ url_for('configuracion') }}" class="btn gris" title="Configurar usuarios">⚙️ Configuración</a>
-                
+                <a href="{{ url_for('configuracion') }}" class="btn gris" title="Configurar usuarios y opciones">⚙️ Configuración</a>
             </div>
 
             <!-- Filtro de fecha para historial -->
             <div class="nav-fecha">
                 <label for="fecha_consulta"><b>Consultar historial:</b></label>
                 <input type="date" id="fecha_consulta" name="fecha_consulta">
-                <button onclick="irAlHistorial()" class="btn amarillo">🔍 Buscar</button>
+                <button type="button" onclick="irAlHistorial()" class="btn amarillo">🔍 Buscar</button>
             </div>
         </nav>
 
@@ -47,4 +48,3 @@
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
 </body>
 </html>
-

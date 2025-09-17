@@ -7,9 +7,9 @@
      Filtro por fecha de consulta
 ============================== -->
 <section class="filtros">
-    <form onsubmit="irAlHistorial(); return false;" style="margin-bottom: 15px;">
+    <form method="get" action="{{ url_for('historial') }}" onsubmit="irAlHistorial(); return false;" style="margin-bottom: 15px;">
         <label for="fecha_consulta">Filtrar por fecha:</label>
-        <input type="date" id="fecha_consulta" name="fecha_consulta" value="{{ fecha or '' }}">
+        <input type="date" id="fecha_consulta" name="fecha" value="{{ fecha or '' }}">
         <button type="submit" class="btn azul">🔍 Consultar</button>
         <a href="{{ url_for('historial') }}" class="btn gris">📋 Ver todo</a>
     </form>
@@ -22,10 +22,10 @@
     <table>
         <thead>
             <tr>
-                <th>Fecha</th>
-                <th>Acción</th>
-                <th>Usuario</th>
-                <th>Detalles</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Acción</th>
+                <th scope="col">Usuario</th>
+                <th scope="col">Detalles</th>
             </tr>
         </thead>
         <tbody>
@@ -38,7 +38,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="4">⚠️ No hay registros en el historial.</td>
+                <td colspan="4" style="text-align:center;">⚠️ No hay registros en el historial.</td>
             </tr>
             {% endfor %}
         </tbody>

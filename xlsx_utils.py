@@ -45,6 +45,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+
 # ======================================================
 #                UTILIDADES BÁSICAS
 # ======================================================
@@ -449,4 +450,35 @@ def replace_sheet_with_df(master_path: str, sheet_name: str, df: pd.DataFrame, k
     - Respeta las filas iniciales (keep_rows).
     - Copia las fórmulas de la fila 2 a las nuevas filas.
     """
-    wb = load_workbook(master_path
+    if not os.path.exists(master_path):
+        raise FileNotFoundError(master_path)
+
+    backup = backup_file(master_path)
+
+    wb = load_workbook(master_path, data_only=False, keep_vba=False)
+    if sheet_name not in wb.sheetnames:
+        raise ValueError(f"La hoja '{sheet_name}' no existe en el maestro.")
+    ws = wb[sheet_name]
+
+    # Borrar datos previos pero conservar encabezados y plantilla
+    _delete_data_rows(ws, keep_rows=keep_rows)
+
+    # Insertar nuevos datos desde DataFrame
+    start_row = keep_rows + 1
+    for r_idx, row in enumerate(df.itertuples(index=False), start=start_row):
+        for c_idx, value in enumerate(row, start=1):
+            ws.cell(row=r_idx, column=c_idx, value=value)
+
+    # Copiar fórmulas desde la fila plantilla si corresponde
+    if keep_rows >= 2 and df.shape[0] > 0:
+        _copy_formula_row(ws, from_row=2, to_row_start=start_row, to_row_end=start_row + df.shape[0] - 1)
+
+    wb.save(master_path)
+
+    return {
+        "sheet": sheet_name,
+        "rows_written": df.shape[0],
+        "backup": backup,
+        "last_row": ws.max_row,
+        "keep_rows": keep_rows,
+    }
