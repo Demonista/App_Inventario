@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title or "Inventario de Escritorio VTI" }}</title>
     <meta name="description" content="Aplicación de escritorio para gestión de inventario con integración de insumos, exportación y validaciones dinámicas.">
-    
+
     <!-- Estilos -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
-    
+
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Code+Pro&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        
+
         <!-- =============================
              Barra superior de navegación
         ============================== -->
@@ -36,6 +36,21 @@
         </nav>
 
         <!-- =============================
+             Mensajes Flash (notificaciones)
+        ============================== -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-container">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}">
+                    {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <!-- =============================
              Contenido dinámico
         ============================== -->
         <main>
@@ -46,5 +61,16 @@
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    <script>
+        // Función para redirigir historial con filtro de fecha
+        function irAlHistorial() {
+            const fecha = document.getElementById("fecha_consulta").value;
+            if (fecha) {
+                window.location.href = "{{ url_for('historial') }}?fecha=" + fecha;
+            } else {
+                window.location.href = "{{ url_for('historial') }}";
+            }
+        }
+    </script>
 </body>
 </html>

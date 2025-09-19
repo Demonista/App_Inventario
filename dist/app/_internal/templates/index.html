@@ -1,4 +1,3 @@
-
 {% extends "layout.html" %}
 
 {% block content %}
@@ -67,7 +66,7 @@
                             <button type="submit" class="btn morado btn-small">🔗 Integrar</button>
                         </form>
 
-                        <!-- Descargar Maestro -->
+                        <!-- Descargar Maestro (solo visible si el archivo es el insumo 1) -->
                         {% if archivo.tipo == "maestro" %}
                             <a href="{{ url_for('download_maestro') }}" class="btn azul btn-small">⬇ Maestro</a>
                         {% endif %}
@@ -75,7 +74,7 @@
                         <!-- Eliminar -->
                         <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
                            class="btn rojo btn-small"
-                           onclick="return confirm('¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
+                           onclick="return confirm('⚠️ ¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
                            🗑 Eliminar
                         </a>
                     </div>
@@ -83,7 +82,9 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="4">No hay archivos cargados.</td>
+                <td colspan="4" style="text-align: center; color: #888;">
+                    🚫 No hay archivos cargados.
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -97,14 +98,11 @@
     <a href="{{ url_for('exportar_excel') }}" class="btn verde btn-small">📤 Exportar Excel</a>
     <a href="{{ url_for('exportar_pdf') }}" class="btn rojo btn-small">📄 Exportar PDF</a>
 
-<!-- ============================= -->
-<!-- Botón para aplicar validaciones -->
-<!-- ============================= -->
+    <!-- Botón para aplicar validaciones -->
     <form action="{{ url_for('aplicar_validaciones') }}" method="post" style="display:inline;">
         <button type="submit" class="btn gris btn-small">
-            <i class="fas fa-check-circle"></i> Aplicar Validaciones
+            ✅ Aplicar Validaciones
         </button>
     </form>
-
 </section>
 {% endblock %}
