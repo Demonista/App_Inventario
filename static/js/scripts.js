@@ -267,3 +267,24 @@ document.addEventListener('DOMContentLoaded', function() {
   const blocks = document.querySelectorAll('.regla-block');
   reglaCount = blocks.length;
 });
+
+// ==============================
+// Tema oscuro / claro
+// ==============================
+function toggleDarkMode() {
+    document.body.classList.toggle("dark-mode");
+
+    // Guardar preferencia en localStorage
+    if (document.body.classList.contains("dark-mode")) {
+        localStorage.setItem("theme", "dark");
+    } else {
+        localStorage.setItem("theme", "light");
+    }
+}
+
+// Al cargar la página, aplicar preferencia guardada
+document.addEventListener("DOMContentLoaded", () => {
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark-mode");
+    }
+});
