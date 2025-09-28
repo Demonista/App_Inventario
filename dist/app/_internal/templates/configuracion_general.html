@@ -4,103 +4,136 @@
 <h1>⚙️ Configuración de Validaciones (Insumo 1)</h1>
 
 <p>
-    Aquí puedes definir las <b>etiquetas personalizadas</b> que se mostrarán en la columna
-    <b>ANÁLISIS VALIDACIONES</b> del archivo maestro.  
-    Cada regla se compone de:
+    Aquí defines las <b>etiquetas personalizadas</b> que se mostrarán en la columna seleccionada del archivo maestro.  
+    Cada regla incluye:
 </p>
 <ul>
-    <li><b>Etiqueta / Resultado:</b> el texto que aparecerá si la condición se cumple.</li>
-    <li><b>Columna objetivo:</b> el nombre de la columna a evaluar.</li>
-    <li><b>Operador:</b> cómo se evaluará la condición.</li>
-    <li><b>Valor esperado:</b> el valor contra el que se comparará (cuando aplique).</li>
+    <li><b>Etiqueta / Resultado:</b> el texto que aparecerá si las condiciones se cumplen.</li>
+    <li><b>Hoja:</b> de qué hoja del maestro se toman los datos.</li>
+    <li><b>Columna destino:</b> en qué columna se escribirá la etiqueta.</li>
+    <li><b>Condiciones:</b> conjunto de comparaciones sobre columnas.</li>
+    <li><b>Operador global:</b> cómo se combinan las condiciones (AND / OR).</li>
 </ul>
 
-<!-- =============================
-     Formulario dinámico de reglas
-=============================== -->
+<!-- IMPORTANTE: apunta a la ruta que guarda -->
 <form action="{{ url_for('guardar_configuracion_general') }}" method="POST">
-    
-    <!-- Contenedor con scroll lateral -->
     <div class="tabla-scroll">
         <table>
             <thead>
                 <tr>
                     <th>Etiqueta / Resultado</th>
-                    <th>Columna objetivo</th>
-                    <th>Operador</th>
-                    <th>Valor esperado</th>
+                    <th>Hoja</th>
+                    <th>Columna destino</th>
+                    <th>Condiciones</th>
+                    <th>Operador global</th>
                     <th>Acción</th>
                 </tr>
             </thead>
             <tbody id="tabla-config">
                 {% for regla in reglas %}
                 <tr>
-                    <!-- Etiqueta personalizada -->
+                    <!-- Etiqueta -->
                     <td>
                         <input type="text" name="etiquetas[]" 
                                value="{{ regla.etiqueta }}" 
-                               placeholder="Ej: SIN ANTIVIRUS"
-                               required>
+                               placeholder="Ej: Riesgo Alto" required>
                     </td>
 
-                    <!-- Columna objetivo -->
+                    <!-- Hoja -->
                     <td>
-                        <input type="text" name="columnas[]" 
-                               value="{{ regla.columna }}" 
-                               placeholder="Ej: Antivirus"
-                               required>
-                    </td>
-
-                    <!-- Operador -->
-                    <td>
-                        <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
-                            <option value="=" {% if regla.operador == "=" %}selected{% endif %}>=</option>
-                            <option value="!=" {% if regla.operador == "!=" %}selected{% endif %}>≠</option>
-                            <option value="contiene" {% if regla.operador == "contiene" %}selected{% endif %}>Contiene</option>
-                            <option value="no_contiene" {% if regla.operador == "no_contiene" %}selected{% endif %}>No contiene</option>
-                            <option value=">" {% if regla.operador == ">" %}selected{% endif %}>&gt;</option>
-                            <option value="<" {% if regla.operador == "<" %}selected{% endif %}>&lt;</option>
-                            <option value="es_vacio" {% if regla.operador == "es_vacio" %}selected{% endif %}>Está vacío</option>
-                            <option value="no_vacio" {% if regla.operador == "no_vacio" %}selected{% endif %}>No está vacío</option>
+                        <select name="hojas[]" required>
+                            {% for hoja in hojas_disponibles %}
+                            <option value="{{ hoja }}" {% if regla.hoja == hoja %}selected{% endif %}>{{ hoja }}</option>
+                            {% endfor %}
                         </select>
                     </td>
 
-                    <!-- Valor esperado -->
+                    <!-- Columna destino -->
                     <td>
-                        <input type="text" name="valores[]" 
-                               value="{{ regla.valor }}" 
-                               placeholder="Ej: No instalado"
-                               {% if regla.operador in ["es_vacio", "no_vacio"] %}disabled{% endif %}>
+                        <select name="columnas_destino[]" required>
+                            {% for col in columnas_disponibles %}
+                            <option value="{{ col }}" {% if regla.columna_destino == col %}selected{% endif %}>{{ col }}</option>
+                            {% endfor %}
+                        </select>
                     </td>
 
-                    <!-- Botón eliminar fila -->
-                    <td style="text-align: center;">
+                    <!-- Condiciones dinámicas -->
+                    <td>
+                        <div class="condiciones" data-index="{{ loop.index0 }}">
+                            {% if regla.conditions %}
+                                {% for cond in regla.conditions %}
+                                <div class="condicion">
+                                    <!-- Columna -->
+                                    <select name="condiciones[{{ loop.parent.index0 }}][columna][]">
+                                        {% for col in columnas_disponibles %}
+                                        <option value="{{ col }}" {% if cond.columna == col %}selected{% endif %}>{{ col }}</option>
+                                        {% endfor %}
+                                    </select>
+
+                                    <!-- Operador -->
+                                    <select name="condiciones[{{ loop.parent.index0 }}][operador][]" onchange="actualizarCampoValor(this)">
+                                        <option value="=" {% if cond.operador == "=" %}selected{% endif %}>=</option>
+                                        <option value="!=" {% if cond.operador == "!=" %}selected{% endif %}>≠</option>
+                                        <option value=">" {% if cond.operador == ">" %}selected{% endif %}>&gt;</option>
+                                        <option value="<" {% if cond.operador == "<" %}selected{% endif %}>&lt;</option>
+                                        <option value="contiene" {% if cond.operador == "contiene" %}selected{% endif %}>Contiene</option>
+                                        <option value="no_contiene" {% if cond.operador == "no_contiene" %}selected{% endif %}>No contiene</option>
+                                        <option value="es_vacio" {% if cond.operador == "es_vacio" %}selected{% endif %}>Está vacío</option>
+                                        <option value="no_vacio" {% if cond.operador == "no_vacio" %}selected{% endif %}>No está vacío</option>
+                                    </select>
+
+                                    <!-- Valor -->
+                                    <input type="text" 
+                                           name="condiciones[{{ loop.parent.index0 }}][valor][]" 
+                                           value="{{ cond.valor }}"
+                                           placeholder="Ej: No instalado"
+                                           {% if cond.operador in ['es_vacio','no_vacio'] %}disabled{% endif %}>
+
+                                    <button type="button" class="btn rojo btn-small" onclick="eliminarCondicion(this)">🗑</button>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <!-- Fila vacía inicial -->
+                                <div class="condicion">
+                                    <select name="condiciones[{{ loop.index0 }}][columna][]">
+                                        {% for col in columnas_disponibles %}
+                                        <option value="{{ col }}">{{ col }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select name="condiciones[{{ loop.index0 }}][operador][]" onchange="actualizarCampoValor(this)">
+                                        <option value="=">=</option>
+                                        <option value="!=">≠</option>
+                                        <option value=">">&gt;</option>
+                                        <option value="<">&lt;</option>
+                                        <option value="contiene">Contiene</option>
+                                        <option value="no_contiene">No contiene</option>
+                                        <option value="es_vacio">Está vacío</option>
+                                        <option value="no_vacio">No está vacío</option>
+                                    </select>
+                                    <input type="text" name="condiciones[{{ loop.index0 }}][valor][]" placeholder="Ej: No instalado">
+                                    <button type="button" class="btn rojo btn-small" onclick="eliminarCondicion(this)">🗑</button>
+                                </div>
+                            {% endif %}
+
+                            <!-- Botón añadir condición -->
+                            <button type="button" class="btn amarillo btn-small" onclick="agregarCondicion(this)">➕ Añadir condición</button>
+                        </div>
+                    </td>
+
+                    <!-- Operador global -->
+                    <td>
+                        <select name="operadores_globales[]">
+                            <option value="AND" {% if regla.logic == "AND" %}selected{% endif %}>AND</option>
+                            <option value="OR" {% if regla.logic == "OR" %}selected{% endif %}>OR</option>
+                        </select>
+                    </td>
+
+                    <!-- Acción -->
+                    <td>
                         <button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button>
                     </td>
                 </tr>
                 {% endfor %}
-
-                {% if reglas|length == 0 %}
-                <!-- Fila inicial si no hay reglas guardadas -->
-                <tr>
-                    <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
-                    <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
-                    <td>
-                        <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
-                            <option value="=">=</option>
-                            <option value="!=">≠</option>
-                            <option value="contiene">Contiene</option>
-                            <option value="no_contiene">No contiene</option>
-                            <option value=">">&gt;</option>
-                            <option value="<">&lt;</option>
-                            <option value="es_vacio">Está vacío</option>
-                            <option value="no_vacio">No está vacío</option>
-                        </select>
-                    </td>
-                    <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
-                    <td><button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button></td>
-                </tr>
-                {% endif %}
             </tbody>
         </table>
     </div>
@@ -114,47 +147,93 @@
 </form>
 
 <!-- =============================
-     Scripts para reglas dinámicas
+     Scripts dinámicos
 =============================== -->
 <script>
 function agregarFilaValidacion() {
     const tbody = document.getElementById("tabla-config");
+    const index = tbody.rows.length;
     const fila = document.createElement("tr");
     fila.innerHTML = `
-        <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
-        <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
+        <td><input type="text" name="etiquetas[]" placeholder="Ej: Riesgo Alto" required></td>
+        <td><select name="hojas[]" required>
+            {% for hoja in hojas_disponibles %}
+            <option value="{{ hoja }}">{{ hoja }}</option>
+            {% endfor %}
+        </select></td>
+        <td><select name="columnas_destino[]" required>
+            {% for col in columnas_disponibles %}
+            <option value="{{ col }}">{{ col }}</option>
+            {% endfor %}
+        </select></td>
         <td>
-            <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
-                <option value="=">=</option>
-                <option value="!=">≠</option>
-                <option value="contiene">Contiene</option>
-                <option value="no_contiene">No contiene</option>
-                <option value=">">&gt;</option>
-                <option value="<">&lt;</option>
-                <option value="es_vacio">Está vacío</option>
-                <option value="no_vacio">No está vacío</option>
+            <div class="condiciones" data-index="${index}">
+                <div class="condicion">
+                    <select name="condiciones[${index}][columna][]">
+                        {% for col in columnas_disponibles %}
+                        <option value="{{ col }}">{{ col }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="condiciones[${index}][operador][]">
+                        <option value="=">=</option>
+                        <option value="!=">≠</option>
+                        <option value=">">&gt;</option>
+                        <option value="<">&lt;</option>
+                        <option value="contiene">Contiene</option>
+                        <option value="no_contiene">No contiene</option>
+                        <option value="es_vacio">Está vacío</option>
+                        <option value="no_vacio">No está vacío</option>
+                    </select>
+                    <input type="text" name="condiciones[${index}][valor][]" placeholder="Ej: No instalado">
+                    <button type="button" class="btn rojo btn-small" onclick="eliminarCondicion(this)">🗑</button>
+                </div>
+                <button type="button" class="btn amarillo btn-small" onclick="agregarCondicion(this)">➕ Añadir condición</button>
+            </div>
+        </td>
+        <td>
+            <select name="operadores_globales[]">
+                <option value="AND">AND</option>
+                <option value="OR">OR</option>
             </select>
         </td>
-        <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
-        <td style="text-align: center;"><button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button></td>
+        <td><button type="button" class="btn rojo btn-small" onclick="eliminarFilaValidacion(this)">❌</button></td>
     `;
     tbody.appendChild(fila);
 }
 
 function eliminarFilaValidacion(boton) {
-    const fila = boton.closest("tr");
-    fila.remove();
+    boton.closest("tr").remove();
 }
 
-function actualizarCampoValor(select) {
-    const valorInput = select.closest("tr").querySelector("input[name='valores[]']");
-    if (select.value === "es_vacio" || select.value === "no_vacio") {
-        valorInput.value = "";
-        valorInput.disabled = true;
-    } else {
-        valorInput.disabled = false;
-    }
+function agregarCondicion(boton) {
+    const contenedor = boton.closest(".condiciones");
+    const index = contenedor.dataset.index;
+    const div = document.createElement("div");
+    div.classList.add("condicion");
+    div.innerHTML = `
+        <select name="condiciones[${index}][columna][]">
+            {% for col in columnas_disponibles %}
+            <option value="{{ col }}">{{ col }}</option>
+            {% endfor %}
+        </select>
+        <select name="condiciones[${index}][operador][]">
+            <option value="=">=</option>
+            <option value="!=">≠</option>
+            <option value=">">&gt;</option>
+            <option value="<">&lt;</option>
+            <option value="contiene">Contiene</option>
+            <option value="no_contiene">No contiene</option>
+            <option value="es_vacio">Está vacío</option>
+            <option value="no_vacio">No está vacío</option>
+        </select>
+        <input type="text" name="condiciones[${index}][valor][]" placeholder="Valor">
+        <button type="button" class="btn rojo btn-small" onclick="eliminarCondicion(this)">🗑</button>
+    `;
+    boton.before(div);
+}
+
+function eliminarCondicion(boton) {
+    boton.closest(".condicion").remove();
 }
 </script>
 {% endblock %}
-

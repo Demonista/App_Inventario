@@ -66,7 +66,7 @@
                             <button type="submit" class="btn morado btn-small">🔗 Integrar</button>
                         </form>
 
-                        <!-- Descargar Maestro (solo visible si el archivo es el insumo 1) -->
+                        <!-- Descargar Maestro (solo si el archivo es el insumo 1) -->
                         {% if archivo.tipo == "maestro" %}
                             <a href="{{ url_for('download_maestro') }}" class="btn azul btn-small">⬇ Maestro</a>
                         {% endif %}
@@ -74,7 +74,7 @@
                         <!-- Eliminar -->
                         <a href="{{ url_for('eliminar', nombre_archivo=archivo.nombre) }}" 
                            class="btn rojo btn-small"
-                           onclick="return confirm('⚠️ ¿Seguro que deseas eliminar {{ archivo.nombre }}?');">
+                           onclick="return confirmarEliminacion('{{ archivo.nombre }}');">
                            🗑 Eliminar
                         </a>
                     </div>
@@ -95,8 +95,19 @@
      Botones de exportación global
 ============================== -->
 <section class="exportacion-global">
-    <a href="{{ url_for('exportar_excel') }}" class="btn verde btn-small">📤 Exportar Excel</a>
-    <a href="{{ url_for('exportar_pdf') }}" class="btn rojo btn-small">📄 Exportar PDF</a>
+    <a href="javascript:void(0)" onclick="exportarExcel()" class="btn verde btn-small">
+        📤 Exportar Excel
+    </a>
+
+    <!-- Exportar PDF con opciones -->
+    <!--<div class="btn-group">-->
+        <button type="button" class="btn rojo btn-small" onclick="exportarPDF(true)">
+            📄 Exportar PDF (Todo)
+        </button>
+        <button type="button" class="btn gris btn-small" onclick="exportarPDF(false)">
+            📄 Exportar PDF (30 filas)
+        </button>
+    <!--</div>-->
 
     <!-- Botón para aplicar validaciones -->
     <form action="{{ url_for('aplicar_validaciones') }}" method="post" style="display:inline;">

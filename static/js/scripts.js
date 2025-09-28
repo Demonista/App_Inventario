@@ -20,18 +20,14 @@ function irAlHistorial() {
   if (fechaInput && fechaInput.value) {
     url += '?fecha=' + encodeURIComponent(fechaInput.value);
   }
-
   window.location.href = url;
 }
 
 // ------------------------------------------------------
 // 2. Integrar archivos subidos con el maestro
-//    -> Envía POST a Flask
 // ------------------------------------------------------
 function integrarArchivos() {
-  if (!confirm("🔗 ¿Deseas integrar todos los insumos al maestro?")) {
-    return;
-  }
+  if (!confirm("🔗 ¿Deseas integrar todos los insumos al maestro?")) return;
 
   fetch('/integrar', {
     method: 'POST',
@@ -43,7 +39,7 @@ function integrarArchivos() {
     })
     .then(data => {
       alert("✅ Integración completada: " + (data.mensaje || "Proceso finalizado"));
-      location.reload(); // refresca resultados
+      location.reload();
     })
     .catch(err => {
       console.error("❌ Error en integración:", err);
@@ -65,27 +61,30 @@ function exportarExcel() {
     })
     .catch(err => {
       console.error("❌ Error en exportación Excel:", err);
-      alert("❌ No se pudo exportar a Excel. Intentando descarga directa...");
       window.open('/exportar-excel', '_blank');
     });
 }
 
 // ------------------------------------------------------
-// 4. Exportar inventario a PDF
+// 4. Exportar inventario a PDF (todo o 30 filas)
 // ------------------------------------------------------
-function exportarPDF() {
-  fetch('/exportar-pdf')
+function exportarPDF(todo = true) {
+  // Si todo = true → exporta todas las filas
+  // Si todo = false → exporta solo 30 filas
+  const url = todo ? '/exportar-pdf' : '/exportar-pdf?limit=30';
+
+  fetch(url)
     .then(response => {
       if (!response.ok) throw new Error('Error en la exportación a PDF');
       return response.blob();
     })
     .then(blob => {
-      descargarArchivo(blob, "inventario.pdf");
+      const nombreArchivo = todo ? "inventario_completo.pdf" : "inventario_30filas.pdf";
+      descargarArchivo(blob, nombreArchivo);
     })
     .catch(err => {
       console.error("❌ Error en exportación PDF:", err);
-      alert("❌ No se pudo exportar a PDF. Intentando descarga directa...");
-      window.open('/exportar-pdf', '_blank');
+      window.open(url, '_blank');
     });
 }
 
@@ -111,54 +110,123 @@ function confirmarEliminacion(nombreArchivo) {
 }
 
 // ------------------------------------------------------
-// 7. Debug en consola (para verificar carga de scripts)
+// 7. Debug en consola
 // ------------------------------------------------------
 console.log("✅ scripts.js cargado correctamente.");
 
-// ------------------------------------------------------
-// 8. Configuración de validaciones (tabla simple)
-// ------------------------------------------------------
-function agregarFilaValidacion() {
-  const tbody = document.getElementById("tabla-config");
-  if (!tbody) return;
+// ======================================================
+// 8. Configuración de validaciones (formato avanzado)
+// ======================================================
 
-  const fila = document.createElement("tr");
-  fila.innerHTML = `
-    <td><input type="text" name="etiquetas[]" placeholder="Ej: SIN ANTIVIRUS" required></td>
-    <td><input type="text" name="columnas[]" placeholder="Ej: Antivirus" required></td>
-    <td>
-      <select name="operadores[]" onchange="actualizarCampoValor(this)" required>
-        <option value="=">=</option>
-        <option value="!=">≠</option>
-        <option value="contiene">Contiene</option>
-        <option value="no_contiene">No contiene</option>
-        <option value=">">&gt;</option>
-        <option value="<">&lt;</option>
-        <option value="es_vacio">Está vacío</option>
-        <option value="no_vacio">No está vacío</option>
-      </select>
-    </td>
-    <td><input type="text" name="valores[]" placeholder="Ej: No instalado"></td>
-    <td style="text-align: center;">
-      <button type="button" class="btn rojo" onclick="eliminarFilaValidacion(this)">❌</button>
-    </td>
+// Contador global de reglas
+let reglaCount = document.querySelectorAll('.regla-block').length || 0;
+
+// HTML base para una fila de condición
+function filaCondicionHTML(i) {
+  return `
+    <tr>
+      <td>
+        <select name="cond_col_${i}[]" required>
+          {% for col in columnas_disponibles %}
+          <option value="{{ col }}">{{ col }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td>
+        <select name="cond_op_${i}[]" onchange="actualizarCampoValor(this)">
+          <option value="=">=</option>
+          <option value="!=">≠</option>
+          <option value="contiene">Contiene</option>
+          <option value="no_contiene">No contiene</option>
+          <option value=">">&gt;</option>
+          <option value="<">&lt;</option>
+          <option value="es_vacio">Está vacío</option>
+          <option value="no_vacio">No está vacío</option>
+        </select>
+      </td>
+      <td><input type="text" name="cond_val_${i}[]" placeholder="Ej: No instalado"></td>
+      <td><button type="button" class="btn rojo" onclick="eliminarCondicion(this)">❌</button></td>
+    </tr>
   `;
-  tbody.appendChild(fila);
 }
 
-function eliminarFilaValidacion(boton) {
-  const tbody = document.getElementById("tabla-config");
-  if (tbody && tbody.rows.length > 1) {
-    boton.closest("tr").remove();
-  } else {
-    alert("Debe existir al menos una regla configurada.");
-  }
+// Agregar una nueva regla
+function agregarRegla() {
+  const container = document.getElementById('reglas-container');
+  const i = reglaCount++;
+
+  const div = document.createElement('div');
+  div.className = 'regla-block';
+  div.dataset.reglaIndex = i;
+
+  div.innerHTML = `
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+      <input type="text" name="etiquetas[]" placeholder="Etiqueta (ej: Riesgo Alto)" required>
+      <select name="logic[]">
+        <option value="AND">AND</option>
+        <option value="OR">OR</option>
+      </select>
+      <button type="button" class="btn rojo" onclick="eliminarRegla(this)">❌ Eliminar regla</button>
+    </div>
+
+    <table class="cond-table">
+      <thead>
+        <tr>
+          <th>Columna</th>
+          <th>Operador</th>
+          <th>Valor</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filaCondicionHTML(i)}
+      </tbody>
+    </table>
+
+    <div style="margin-top:4px;">
+      <button type="button" class="btn amarillo" onclick="agregarCondicion(${i})">➕ Añadir condición</button>
+    </div>
+    <hr>
+  `;
+
+  container.appendChild(div);
+
+  // Inicializar la primera condición
+  const select = div.querySelector("select[name^='cond_op_']");
+  if (select) actualizarCampoValor(select);
 }
 
+// Agregar condición dentro de una regla existente
+function agregarCondicion(i) {
+  const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
+  if (!block) return;
+
+  const tbody = block.querySelector('table.cond-table tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = filaCondicionHTML(i);
+  tbody.appendChild(tr);
+
+  const select = tr.querySelector("select[name^='cond_op_']");
+  if (select) actualizarCampoValor(select);
+}
+
+// Eliminar regla completa
+function eliminarRegla(btn) {
+  const block = btn.closest('.regla-block');
+  if (block) block.remove();
+}
+
+// Eliminar condición
+function eliminarCondicion(btn) {
+  const tr = btn.closest('tr');
+  if (tr) tr.remove();
+}
+
+// Actualizar campo de valor según operador
 function actualizarCampoValor(select) {
   const fila = select.closest("tr");
-  const inputValor = fila.querySelector("input[name='valores[]']");
-  
+  const inputValor = fila.querySelector("input[name^='cond_val_']");
+
   const operadoresSinValor = ["es_vacio", "no_vacio"];
   if (operadoresSinValor.includes(select.value)) {
     inputValor.value = "";
@@ -170,121 +238,32 @@ function actualizarCampoValor(select) {
   }
 }
 
-// Inicializar validaciones al cargar página
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll("select[name='operadores[]']").forEach(sel => {
-    actualizarCampoValor(sel);
-  });
-});
-
-// ------------------------------------------------------
-// 9. Reglas avanzadas (bloques dinámicos con condiciones)
-// ------------------------------------------------------
-let reglaCount = document.querySelectorAll('.regla-block').length || 0;
-
-function agregarRegla() {
-  const container = document.getElementById('reglas-container');
-  const i = reglaCount++;
-  const div = document.createElement('div');
-  div.className = 'regla-block';
-  div.dataset.reglaIndex = i;
-  div.innerHTML = `
-    <div style="display:flex; gap:8px; align-items:center;">
-      <input type="text" name="etiquetas[]" placeholder="Etiqueta" required>
-      <select name="logic[]">
-        <option value="AND">AND</option>
-        <option value="OR">OR</option>
-      </select>
-      <button type="button" onclick="eliminarRegla(this)">Eliminar regla</button>
-    </div>
-    <table class="cond-table">
-      <thead><tr><th>Columna</th><th>Operador</th><th>Valor</th><th>Acción</th></tr></thead>
-      <tbody>
-        <tr>
-          <td><input type="text" name="cond_col_${i}[]" required></td>
-          <td>
-            <select name="cond_op_${i}[]">
-              <option value="=">=</option>
-              <option value="!=">≠</option>
-              <option value="contiene">Contiene</option>
-              <option value="no_contiene">No contiene</option>
-              <option value=">">&gt;</option>
-              <option value="<">&lt;</option>
-              <option value="es_vacio">Está vacío</option>
-              <option value="no_vacio">No está vacío</option>
-            </select>
-          </td>
-          <td><input type="text" name="cond_val_${i}[]"></td>
-          <td><button type="button" onclick="eliminarCondicion(this)">❌</button></td>
-        </tr>
-      </tbody>
-    </table>
-    <div>
-      <button type="button" onclick="agregarCondicion(${i})">➕ Agregar condición</button>
-    </div>
-    <hr>
-  `;
-  container.appendChild(div);
-}
-
-function eliminarRegla(btn) {
-  const block = btn.closest('.regla-block');
-  if (block) block.remove();
-}
-
-function agregarCondicion(i) {
-  const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
-  if (!block) return;
-  const tbody = block.querySelector('table.cond-table tbody');
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><input type="text" name="cond_col_${i}[]" required></td>
-    <td>
-      <select name="cond_op_${i}[]">
-        <option value="=">=</option>
-        <option value="!=">≠</option>
-        <option value="contiene">Contiene</option>
-        <option value="no_contiene">No contiene</option>
-        <option value=">">&gt;</option>
-        <option value="<">&lt;</option>
-        <option value="es_vacio">Está vacío</option>
-        <option value="no_vacio">No está vacío</option>
-      </select>
-    </td>
-    <td><input type="text" name="cond_val_${i}[]"></td>
-    <td><button type="button" onclick="eliminarCondicion(this)">❌</button></td>
-  `;
-  tbody.appendChild(tr);
-}
-
-function eliminarCondicion(btn) {
-  const tr = btn.closest('tr');
-  if (tr) tr.remove();
-}
-
-// Inicializar contador de reglas si ya existen
-document.addEventListener('DOMContentLoaded', function() {
-  const blocks = document.querySelectorAll('.regla-block');
-  reglaCount = blocks.length;
-});
-
-// ==============================
-// Tema oscuro / claro
-// ==============================
+// ======================================================
+// 9. Tema oscuro / claro
+// ======================================================
 function toggleDarkMode() {
-    document.body.classList.toggle("dark-mode");
+  document.body.classList.toggle("dark-mode");
 
-    // Guardar preferencia en localStorage
-    if (document.body.classList.contains("dark-mode")) {
-        localStorage.setItem("theme", "dark");
-    } else {
-        localStorage.setItem("theme", "light");
-    }
+  if (document.body.classList.contains("dark-mode")) {
+    localStorage.setItem("theme", "dark");
+  } else {
+    localStorage.setItem("theme", "light");
+  }
 }
 
 // Al cargar la página, aplicar preferencia guardada
 document.addEventListener("DOMContentLoaded", () => {
-    if (localStorage.getItem("theme") === "dark") {
-        document.body.classList.add("dark-mode");
-    }
+  if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+  }
+
+  // Inicializar operadores existentes
+  document.querySelectorAll("select[name^='cond_op_']").forEach(sel => {
+    actualizarCampoValor(sel);
+  });
+
+  // Reset contador de reglas
+  const blocks = document.querySelectorAll('.regla-block');
+  reglaCount = blocks.length;
 });
+
