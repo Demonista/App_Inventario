@@ -116,4 +116,14 @@
         </button>
     </form>
 </section>
+
+<!-- =============================
+     Variables dinámicas para JS
+============================== -->
+<script>
+  // Hojas y columnas obtenidas dinámicamente desde Flask
+  window.hojasDisponibles = {{ hojas_disponibles | tojson }};
+  window.columnasDisponibles = {{ columnas_disponibles | tojson }};
+</script>
+
 {% endblock %}

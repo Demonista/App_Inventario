@@ -257,13 +257,22 @@ def index():
     """
     Página principal:
     - Carga listado de archivos subidos desde archivos.json.
+    - Lee dinámicamente hojas y columnas del Maestro.
     - Seguridad: si el JSON está dañado → retorna lista vacía.
     """
     archivos = cargar_json(ARCHIVOS_JSON, [])
     if not isinstance(archivos, list):
         archivos = []
-    return render_template("index.html", archivos=archivos)
 
+    # Obtener hojas y columnas dinámicamente del Maestro
+    hojas_disponibles, columnas_disponibles = get_maestro_sheets_and_columns()
+
+    return render_template(
+        "index.html",
+        archivos=archivos,
+        hojas_disponibles=hojas_disponibles,
+        columnas_disponibles=columnas_disponibles
+    )
 
 @app.route("/upload", methods=["POST"])
 def upload():
