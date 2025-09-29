@@ -115,21 +115,37 @@ function confirmarEliminacion(nombreArchivo) {
 console.log("✅ scripts.js cargado correctamente.");
 
 // ======================================================
-// 8. Configuración de validaciones (formato avanzado)
+// Funciones de soporte para la app Flask de Inventario
 // ======================================================
+
+// ------------------------------------------------------
+// 8. Configuración de validaciones dinámicas
+// ------------------------------------------------------
 
 // Contador global de reglas
 let reglaCount = document.querySelectorAll('.regla-block').length || 0;
 
-// HTML base para una fila de condición
+/**
+ * Genera dinámicamente el HTML de una condición
+ * @param {number} i - Índice de la regla a la que pertenece
+ */
 function filaCondicionHTML(i) {
+  let opciones = "";
+
+  // Solo cargamos columnas si existen
+  if (window.columnasDisponibles && Array.isArray(window.columnasDisponibles)) {
+    opciones = window.columnasDisponibles
+      .map(col => `<option value="${col}">${col}</option>`)
+      .join("");
+  } else {
+    opciones = `<option disabled>(No hay columnas disponibles)</option>`;
+  }
+
   return `
     <tr>
       <td>
         <select name="cond_col_${i}[]" required>
-          {% for col in columnas_disponibles %}
-          <option value="{{ col }}">{{ col }}</option>
-          {% endfor %}
+          ${opciones}
         </select>
       </td>
       <td>
@@ -144,13 +160,19 @@ function filaCondicionHTML(i) {
           <option value="no_vacio">No está vacío</option>
         </select>
       </td>
-      <td><input type="text" name="cond_val_${i}[]" placeholder="Ej: No instalado"></td>
-      <td><button type="button" class="btn rojo" onclick="eliminarCondicion(this)">❌</button></td>
+      <td>
+        <input type="text" name="cond_val_${i}[]" placeholder="Ej: No instalado">
+      </td>
+      <td>
+        <button type="button" class="btn rojo" onclick="eliminarCondicion(this)">❌</button>
+      </td>
     </tr>
   `;
 }
 
-// Agregar una nueva regla
+/**
+ * Agrega una nueva regla (bloque con condiciones)
+ */
 function agregarRegla() {
   const container = document.getElementById('reglas-container');
   const i = reglaCount++;
@@ -196,7 +218,10 @@ function agregarRegla() {
   if (select) actualizarCampoValor(select);
 }
 
-// Agregar condición dentro de una regla existente
+/**
+ * Agregar condición dentro de una regla existente
+ * @param {number} i - Índice de la regla
+ */
 function agregarCondicion(i) {
   const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
   if (!block) return;
@@ -206,23 +231,30 @@ function agregarCondicion(i) {
   tr.innerHTML = filaCondicionHTML(i);
   tbody.appendChild(tr);
 
+  // Inicializar campo de valor
   const select = tr.querySelector("select[name^='cond_op_']");
   if (select) actualizarCampoValor(select);
 }
 
-// Eliminar regla completa
+/**
+ * Elimina una regla completa
+ */
 function eliminarRegla(btn) {
   const block = btn.closest('.regla-block');
   if (block) block.remove();
 }
 
-// Eliminar condición
+/**
+ * Elimina una condición específica
+ */
 function eliminarCondicion(btn) {
   const tr = btn.closest('tr');
   if (tr) tr.remove();
 }
 
-// Actualizar campo de valor según operador
+/**
+ * Desactiva/activa campo de valor según operador
+ */
 function actualizarCampoValor(select) {
   const fila = select.closest("tr");
   const inputValor = fila.querySelector("input[name^='cond_val_']");
