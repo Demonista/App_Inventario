@@ -122,24 +122,37 @@ console.log("✅ scripts.js cargado correctamente.");
 // 8. Configuración de validaciones dinámicas
 // ------------------------------------------------------
 
+// ====================== VALIDACIONES DINÁMICAS ======================
+
 // Contador global de reglas
 let reglaCount = document.querySelectorAll('.regla-block').length || 0;
 
 /**
- * Genera dinámicamente el HTML de una condición
- * @param {number} i - Índice de la regla a la que pertenece
+ * Devuelve un string con <option> para las columnas de una hoja
+ */
+function _optionsForColumns(columns) {
+  if (!columns || !Array.isArray(columns)) return "";
+  return columns.map(col => `<option value="${col}">${col}</option>`).join("");
+}
+
+/**
+ * Crea el HTML del select de hoja para una regla
+ */
+function crearSelectHojasHTML(i) {
+  const hojas = Object.keys(window.hojasColumnas || {});
+  if (!hojas.length) {
+    return `<select name="hojas[]" onchange="onChangeHoja(this, ${i})"><option value="">--Sin hoja--</option></select>`;
+  }
+  const options = hojas.map(h => `<option value="${h}">${h}</option>`).join("");
+  return `<select name="hojas[]" onchange="onChangeHoja(this, ${i})">${options}</select>`;
+}
+
+/**
+ * Genera la fila HTML de una condición usando las columnas disponibles actuales (fallback).
  */
 function filaCondicionHTML(i) {
-  let opciones = "";
-
-  // Solo cargamos columnas si existen
-  if (window.columnasDisponibles && Array.isArray(window.columnasDisponibles)) {
-    opciones = window.columnasDisponibles
-      .map(col => `<option value="${col}">${col}</option>`)
-      .join("");
-  } else {
-    opciones = `<option disabled>(No hay columnas disponibles)</option>`;
-  }
+  const columnas = window.columnasDisponibles || [];
+  const opciones = _optionsForColumns(columnas);
 
   return `
     <tr>
@@ -160,18 +173,14 @@ function filaCondicionHTML(i) {
           <option value="no_vacio">No está vacío</option>
         </select>
       </td>
-      <td>
-        <input type="text" name="cond_val_${i}[]" placeholder="Ej: No instalado">
-      </td>
-      <td>
-        <button type="button" class="btn rojo" onclick="eliminarCondicion(this)">❌</button>
-      </td>
+      <td><input type="text" name="cond_val_${i}[]" placeholder="Ej: No instalado"></td>
+      <td><button type="button" class="btn rojo" onclick="eliminarCondicion(this)">❌</button></td>
     </tr>
   `;
 }
 
 /**
- * Agrega una nueva regla (bloque con condiciones)
+ * Crear una regla nueva (contiene: etiqueta, hoja select, lógica y tabla de condiciones)
  */
 function agregarRegla() {
   const container = document.getElementById('reglas-container');
@@ -181,9 +190,11 @@ function agregarRegla() {
   div.className = 'regla-block';
   div.dataset.reglaIndex = i;
 
+  // construir HTML en tiempo de ejecución para poder usar window.hojasColumnas
   div.innerHTML = `
     <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
       <input type="text" name="etiquetas[]" placeholder="Etiqueta (ej: Riesgo Alto)" required>
+      ${crearSelectHojasHTML(i)}
       <select name="logic[]">
         <option value="AND">AND</option>
         <option value="OR">OR</option>
@@ -213,14 +224,13 @@ function agregarRegla() {
 
   container.appendChild(div);
 
-  // Inicializar la primera condición
+  // inicializar campo operador en la primera fila
   const select = div.querySelector("select[name^='cond_op_']");
   if (select) actualizarCampoValor(select);
 }
 
 /**
- * Agregar condición dentro de una regla existente
- * @param {number} i - Índice de la regla
+ * Añade una condición a la regla i.
  */
 function agregarCondicion(i) {
   const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
@@ -231,13 +241,16 @@ function agregarCondicion(i) {
   tr.innerHTML = filaCondicionHTML(i);
   tbody.appendChild(tr);
 
-  // Inicializar campo de valor
+  // Si la regla tiene una hoja seleccionada, actualizar las columnas de la nueva fila
+  const hojaSelec = obtenerHojaSeleccionadaEnRegla(i);
+  if (hojaSelec) actualizarColumnOptions(i, hojaSelec);
+
   const select = tr.querySelector("select[name^='cond_op_']");
   if (select) actualizarCampoValor(select);
 }
 
 /**
- * Elimina una regla completa
+ * Eliminar regla completa
  */
 function eliminarRegla(btn) {
   const block = btn.closest('.regla-block');
@@ -245,7 +258,7 @@ function eliminarRegla(btn) {
 }
 
 /**
- * Elimina una condición específica
+ * Eliminar fila de condición
  */
 function eliminarCondicion(btn) {
   const tr = btn.closest('tr');
@@ -253,7 +266,41 @@ function eliminarCondicion(btn) {
 }
 
 /**
- * Desactiva/activa campo de valor según operador
+ * Obtiene la hoja seleccionada en la regla i
+ */
+function obtenerHojaSeleccionadaEnRegla(i) {
+  const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
+  if (!block) return null;
+  const sel = block.querySelector('select[name="hojas[]"]');
+  return sel ? sel.value : null;
+}
+
+/**
+ * Cuando se cambia la hoja en la regla -> actualizar selects de columnas
+ */
+function onChangeHoja(selectElem, i) {
+  const hoja = selectElem.value;
+  actualizarColumnOptions(i, hoja);
+}
+
+/**
+ * Actualiza todas las opciones de select de columnas para la regla i según la hoja indicada.
+ */
+function actualizarColumnOptions(i, hoja) {
+  const cols = (window.hojasColumnas && window.hojasColumnas[hoja]) ? window.hojasColumnas[hoja] : (window.columnasDisponibles || []);
+  const opts = _optionsForColumns(cols);
+
+  const block = document.querySelector(`.regla-block[data-regla-index="${i}"]`);
+  if (!block) return;
+  // todos los selects de columna en esa regla
+  const selects = block.querySelectorAll(`select[name="cond_col_${i}[]"]`);
+  selects.forEach(sel => {
+    sel.innerHTML = opts;
+  });
+}
+
+/**
+ * Actualizar campo de valor según operador
  */
 function actualizarCampoValor(select) {
   const fila = select.closest("tr");
@@ -269,6 +316,23 @@ function actualizarCampoValor(select) {
     inputValor.placeholder = "Ej: No instalado";
   }
 }
+
+// Inicialización al cargar la página
+document.addEventListener("DOMContentLoaded", () => {
+  // Inicializar selects de operadores ya existentes
+  document.querySelectorAll("select[name^='cond_op_']").forEach(sel => {
+    actualizarCampoValor(sel);
+  });
+
+  // Inicializar contador y setear columnas en reglas preexistentes
+  document.querySelectorAll('.regla-block').forEach(block => {
+    const i = block.dataset.reglaIndex;
+    const hoja = obtenerHojaSeleccionadaEnRegla(i);
+    if (hoja) actualizarColumnOptions(i, hoja);
+  });
+
+  reglaCount = document.querySelectorAll('.regla-block').length || 0;
+});
 
 // ======================================================
 // 9. Tema oscuro / claro

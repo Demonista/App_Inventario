@@ -210,6 +210,42 @@ def _compose_nombre(df_row: pd.Series, cols: Dict[str, Optional[str]]) -> Option
         return None
     return f"{' '.join(apellidos)} {' '.join(nombres)}".strip()
 
+def get_maestro_sheets_and_columns(maestro_path: Optional[str] = None):
+    """
+    Devuelve (hojas_list, hojas_columnas_map).
+
+    - hojas_list: lista de nombres de hoja del archivo maestro (ordenada).
+    - hojas_columnas_map: dict { hoja_nombre: [col1, col2, ...] } con las columnas
+      detectadas en cada hoja (intenta leer solo los encabezados).
+    - Si el archivo no existe o ocurre un error, retorna ([], {}).
+
+    Nota: se solicita pasar la ruta del maestro desde app.py (MAESTRO_FILE).
+    """
+    if not maestro_path:
+        return [], {}
+
+    if not os.path.exists(maestro_path):
+        return [], {}
+
+    try:
+        xl = pd.ExcelFile(maestro_path, engine="openpyxl")
+        hojas = xl.sheet_names or []
+        hojas_columnas_map: Dict[str, List[str]] = {}
+
+        for hoja in hojas:
+            try:
+                # Leer solo encabezado (nrows=0) para obtener columnas
+                df_head = xl.parse(hoja, nrows=0)
+                hojas_columnas_map[hoja] = list(df_head.columns)
+            except Exception:
+                # Si falla leer la hoja (p. ej. hoja vacía), poner lista vacía
+                hojas_columnas_map[hoja] = []
+
+        return hojas, hojas_columnas_map
+
+    except Exception:
+        return [], {}
+
 
 # ======================================================
 #           INTEGRACIÓN DE INSUMO 3: PERSONAL
@@ -482,4 +518,3 @@ def replace_sheet_with_df(master_path: str, sheet_name: str, df: pd.DataFrame, k
         "last_row": ws.max_row,
         "keep_rows": keep_rows,
     }
-    

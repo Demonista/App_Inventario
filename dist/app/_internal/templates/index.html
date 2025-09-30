@@ -120,6 +120,11 @@
 <!-- =============================
      Variables dinámicas para JS
 ============================== -->
+<script type="text/javascript">
+  window.hojasColumnas = {{ hojas_columnas_map | tojson | safe }};
+  window.columnasDisponibles = {{ columnas_disponibles | tojson | safe }};
+</script>
+
 <script>
   // Hojas y columnas obtenidas dinámicamente desde Flask
   window.hojasDisponibles = {{ hojas_disponibles | tojson }};

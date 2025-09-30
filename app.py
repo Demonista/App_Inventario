@@ -20,12 +20,23 @@ from flask import Flask, render_template, request, redirect, url_for, send_file,
 import pandas as pd
 import openpyxl
 from werkzeug.utils import secure_filename   # ✅ Import corregido
+# 📂 Importar funciones utilitarias desde xlsx_utils.py
+from xlsx_utils import (
+    integrate_personnel_to_estado,
+    replace_sheet_with_df,
+    get_maestro_sheets_and_columns
+)
+
 
 # =====================================================
 # Configuración básica
 # =====================================================
 
 app = Flask(__name__)
+
+# Clave secreta para sesiones y flash()
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "supersecreto_inventario_123")
+
 
 # Carpetas principales
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -257,21 +268,28 @@ def index():
     """
     Página principal:
     - Carga listado de archivos subidos desde archivos.json.
-    - Lee dinámicamente hojas y columnas del Maestro.
-    - Seguridad: si el JSON está dañado → retorna lista vacía.
+    - Pasa info de hojas/columnas del maestro para JS (si existe).
     """
     archivos = cargar_json(ARCHIVOS_JSON, [])
     if not isinstance(archivos, list):
         archivos = []
 
-    # Obtener hojas y columnas dinámicamente del Maestro
-    hojas_disponibles, columnas_disponibles = get_maestro_sheets_and_columns()
+    # Obtener hojas y columnas (si existe maestro)
+    try:
+        from xlsx_utils import get_maestro_sheets_and_columns
+        hojas_disponibles, hojas_columnas_map = get_maestro_sheets_and_columns(MAESTRO_FILE)
+        columnas_disponibles = hojas_columnas_map.get("General") or next(
+            (cols for cols in hojas_columnas_map.values() if cols), []
+        )
+    except Exception:
+        hojas_disponibles, hojas_columnas_map, columnas_disponibles = [], {}, []
 
     return render_template(
         "index.html",
         archivos=archivos,
         hojas_disponibles=hojas_disponibles,
-        columnas_disponibles=columnas_disponibles
+        columnas_disponibles=columnas_disponibles,
+        hojas_columnas_map=hojas_columnas_map
     )
 
 @app.route("/upload", methods=["POST"])
@@ -372,7 +390,7 @@ def integrar():
         return redirect(url_for("index"))
 
     try:
-        # Cargar insumo
+        # Cargar insumo como DataFrame
         df_insumo = pd.read_excel(filepath, engine="openpyxl")
 
         # Caso 1: Definir Maestro inicial
@@ -380,40 +398,41 @@ def integrar():
             df_insumo.to_excel(MAESTRO_FILE, index=False, engine="openpyxl")
             flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
             registrar_evento("Integración", f"Se estableció {filename} como Maestro")
+            return redirect(url_for("index"))
+
+        # Caso 2: Integrar en Maestro existente
+        if not os.path.exists(MAESTRO_FILE):
+            flash("⚠️ No existe maestro para integrar.", "error")
+            return redirect(url_for("index"))
+
+        # Integraciones específicas por tipo de insumo
+        if tipo_insumo == "general":
+            replace_sheet_with_df(MAESTRO_FILE, "General", df_insumo)
+
+        elif tipo_insumo in ("personal_ingresos", "personal_retiros", "personal_actualizacion"):
+            integrate_personnel_to_estado(MAESTRO_FILE, filepath, tipo_insumo)
 
         else:
-            # Caso 2: Integrar en Maestro existente
-            if not os.path.exists(MAESTRO_FILE):
-                flash("⚠️ No existe maestro para integrar.", "error")
-                return redirect(url_for("index"))
+            hoja_destino = tipo_insumo.capitalize()
+            replace_sheet_with_df(MAESTRO_FILE, hoja_destino, df_insumo)
 
-            from openpyxl import load_workbook
-            wb = load_workbook(MAESTRO_FILE)
+        # Aplicar validaciones dinámicas
+        try:
+            config_data = cargar_json(CONFIG_JSON, {})
+            reglas = config_data.get("validaciones", [])
+            if reglas:
+                # Aplicar validaciones directamente en hoja General
+                xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
+                if "General" in xl.sheet_names:
+                    df_general = xl.parse("General")
+                    df_general = aplicar_reglas(df_general, reglas)
+                    with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl",
+                                        mode="a", if_sheet_exists="replace") as writer:
+                        df_general.to_excel(writer, sheet_name="General", index=False)
+        except Exception as e:
+            flash(f"⚠️ Error aplicando validaciones dinámicas: {e}", "warning")
 
-            # Integraciones específicas
-            if tipo_insumo == "general":
-                replace_sheet_content(wb, "General", df_insumo)
-
-            elif tipo_insumo in ("personal_ingresos", "personal_retiros", "personal_actualizacion"):
-                update_estado_gen_usuario(wb, df_insumo, tipo_insumo)
-
-            else:
-                hoja_destino = tipo_insumo.capitalize()
-                replace_sheet_content(wb, hoja_destino, df_insumo)
-
-            # Aplicar validaciones dinámicas
-            try:
-                config_data = cargar_json(CONFIG_JSON, {})
-                reglas = config_data.get("validaciones", [])
-                if reglas:
-                    apply_validations_to_general(wb, reglas)
-            except Exception as e:
-                flash(f"⚠️ Error aplicando validaciones dinámicas: {e}", "warning")
-
-            # Guardar Maestro actualizado
-            wb.save(MAESTRO_FILE)
-            registrar_evento("Integración", f"{filename} integrado como {tipo_insumo}")
-
+        registrar_evento("Integración", f"{filename} integrado como {tipo_insumo}")
         flash(f"✅ Archivo {filename} integrado como {tipo_insumo}.", "success")
 
     except Exception as e:
@@ -421,7 +440,6 @@ def integrar():
         registrar_evento("Error", f"Fallo al integrar {filename}: {e}")
 
     return redirect(url_for("index"))
-
 
 # =============================
 # Aplicar validaciones al Maestro
@@ -676,18 +694,27 @@ def configuracion_general():
     """
     Página para configurar reglas de validación (Insumo 1).
     GET: entrega la plantilla con hojas y columnas detectadas en el Maestro.
-    POST: puede usarse para guardar un JSON simple (la lógica real de guardado
-          está en la ruta /guardar_configuracion_general).
+    POST: solo muestra mensaje (el guardado real está en /guardar_configuracion_general).
     """
     # cargar configuración existente (si hay)
     config_data = cargar_json(CONFIG_JSON, {})
     reglas_guardadas = config_data.get("validaciones", [])
 
     # obtener hojas y columnas del maestro (para pre-poblar selects)
-    hojas_disponibles, columnas_disponibles = get_maestro_sheets_and_columns()
+    try:
+        # import local para evitar import circulares si los hay
+        from xlsx_utils import get_maestro_sheets_and_columns
+        hojas_disponibles, hojas_columnas_map = get_maestro_sheets_and_columns(MAESTRO_FILE)
+    except Exception:
+        hojas_disponibles, hojas_columnas_map = [], {}
 
-    # si la plantilla hace POST aquí, podríamos manejarlo; pero preferimos delegar
-    # al endpoint específico para guardar reglas (guardar_configuracion_general)
+    # columnas por defecto: preferir "General", si no la primera hoja con columnas
+    columnas_disponibles = []
+    if hojas_columnas_map:
+        columnas_disponibles = hojas_columnas_map.get("General") or next(
+            (cols for cols in hojas_columnas_map.values() if cols), []
+        )
+
     if request.method == "POST":
         flash("Use el botón Guardar en el formulario de reglas para persistir.", "info")
 
@@ -696,79 +723,17 @@ def configuracion_general():
         config=config_data,
         reglas=reglas_guardadas,
         hojas_disponibles=hojas_disponibles,
-        columnas_disponibles=columnas_disponibles
+        columnas_disponibles=columnas_disponibles,
+        hojas_columnas_map=hojas_columnas_map
     )
 
-
-@app.route("/guardar_configuracion_general", methods=["POST"])
+@app.route("/guardar-configuracion-general", methods=["POST"])
 def guardar_configuracion_general():
-    """
-    Guarda reglas compuestas (varias condiciones por etiqueta), enviadas desde
-    configuracion_general.html. Soporta el formulario con campos:
-      - etiquetas[]                   (por regla)
-      - hojas[]                       (por regla)  --> hoja del maestro a la que aplica
-      - columnas_destino[]            (por regla)  --> columna que recibirá la etiqueta
-      - operadores_globales[]         (por regla)  --> AND/OR
-      - condiciones[i][columna][]     (por regla i)
-      - condiciones[i][operador][]    (por regla i)
-      - condiciones[i][valor][]       (por regla i)
-    """
-    try:
-        etiquetas = request.form.getlist("etiquetas[]")
-        hojas = request.form.getlist("hojas[]")
-        columnas_destino = request.form.getlist("columnas_destino[]")
-        operadores_globales = request.form.getlist("operadores_globales[]")
+    data = request.form.to_dict()
+    with open(CONFIG_JSON, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
-        reglas = []
-        n = max(len(etiquetas), len(hojas), len(columnas_destino), len(operadores_globales))
-
-        for i in range(n):
-            etiqueta = (etiquetas[i] if i < len(etiquetas) else "").strip()
-            hoja = (hojas[i] if i < len(hojas) else "").strip()
-            col_dest = (columnas_destino[i] if i < len(columnas_destino) else "").strip()
-            logic = (operadores_globales[i] if i < len(operadores_globales) else "AND").strip().upper()
-            if logic not in ("AND", "OR"):
-                logic = "AND"
-
-            # leer condiciones de la regla i usando la nomenclatura del form
-            pref_col = f"condiciones[{i}][columna][]"
-            pref_op = f"condiciones[{i}][operador][]"
-            pref_val = f"condiciones[{i}][valor][]"
-
-            cols = request.form.getlist(pref_col)
-            ops = request.form.getlist(pref_op)
-            vals = request.form.getlist(pref_val)
-
-            condiciones = []
-            m = max(len(cols), len(ops), len(vals))
-            for j in range(m):
-                c = cols[j].strip() if j < len(cols) else ""
-                o = ops[j].strip() if j < len(ops) else ""
-                v = vals[j].strip() if j < len(vals) else ""
-                if not c:
-                    continue
-                condiciones.append({"columna": c, "operador": o, "valor": v})
-
-            if etiqueta and condiciones:
-                reglas.append({
-                    "etiqueta": etiqueta,
-                    "hoja": hoja,
-                    "columna_destino": col_dest,
-                    "logic": logic,
-                    "conditions": condiciones
-                })
-
-        # Guardar en config.json
-        config_data = cargar_json(CONFIG_JSON, {})
-        config_data["validaciones"] = reglas
-        guardar_json(CONFIG_JSON, config_data)
-
-        flash("✅ Reglas compuestas guardadas correctamente.", "success")
-        registrar_evento("Configuración general", f"Guardadas {len(reglas)} reglas")
-    except Exception as e:
-        flash(f"❌ Error al guardar reglas compuestas: {e}", "error")
-        registrar_evento("Error", f"Fallo al guardar reglas compuestas: {e}")
-
+    flash("Configuración guardada correctamente", "success")
     return redirect(url_for("configuracion_general"))
 
 

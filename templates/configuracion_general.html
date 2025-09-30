@@ -149,6 +149,12 @@
 <!-- =============================
      Scripts dinámicos
 =============================== -->
+<script type="text/javascript">
+  // Exponer en JS el mapa hoja -> columnas y columnas por defecto
+  window.hojasColumnas = {{ hojas_columnas_map | tojson | safe }};
+  window.columnasDisponibles = {{ columnas_disponibles | tojson | safe }};
+</script>
+
 <script>
 function agregarFilaValidacion() {
     const tbody = document.getElementById("tabla-config");

@@ -10,5 +10,65 @@
         "fecha": "2025-08-25 20:23:00",
         "tipo": "desconocido",
         "cargado": true
+    },
+    {
+        "fecha": "2025-09-29 17:20:09",
+        "evento": "Integración",
+        "detalle": "Se estableció Oct09Reporte-Data_Inventariodeprueba.xlsx como Maestro"
+    },
+    {
+        "fecha": "2025-09-29 17:20:17",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: name 'replace_sheet_content' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 17:20:29",
+        "evento": "Error",
+        "detalle": "Fallo al integrar tmpArandira.xlsx: name 'replace_sheet_content' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 18:01:03",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: name 'replace_sheet_with_df' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 18:01:13",
+        "evento": "Error",
+        "detalle": "Fallo al integrar tmpArandira.xlsx: name 'replace_sheet_with_df' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 18:17:27",
+        "evento": "Error",
+        "detalle": "Fallo al integrar tmpArandira.xlsx: name 'replace_sheet_with_df' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 18:17:34",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: name 'replace_sheet_with_df' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 18:39:14",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: _path_exists: path should be string, bytes, os.PathLike or integer, not Workbook"
+    },
+    {
+        "fecha": "2025-09-29 18:39:37",
+        "evento": "Error",
+        "detalle": "Fallo al integrar tmpArandira.xlsx: _path_exists: path should be string, bytes, os.PathLike or integer, not Workbook"
+    },
+    {
+        "fecha": "2025-09-29 19:01:33",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: name 'maestro_path' is not defined"
+    },
+    {
+        "fecha": "2025-09-29 19:30:52",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-09-29 19:31:01",
+        "evento": "Error",
+        "detalle": "Fallo al integrar tmpArandira.xlsx: La hoja 'Aranda' no existe en el maestro."
     }
 ]
