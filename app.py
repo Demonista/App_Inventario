@@ -15,7 +15,7 @@ Incluye:
 import os
 import json
 from datetime import datetime
-
+from typing import Optional
 from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify, flash
 import pandas as pd
 import openpyxl
@@ -233,33 +233,35 @@ MAESTRO_FILE = os.path.join(OUTPUT_FOLDER, "maestro.xlsx")
 # ----------------------------
 # Utilidad: Leer hojas y columnas del Maestro
 # ----------------------------
-def get_maestro_sheets_and_columns(maestro_path=None):
+def get_maestro_sheets_and_columns(maestro_path: Optional[str] = None):
     """
-    Devuelve (hojas, columnas) donde:
-      - hojas: lista de nombres de hoja existentes en el maestro (ordenada)
-      - columnas: lista de nombres de columnas en la hoja 'General' si existe,
-                  o en la primera hoja disponible.
-
-    Si no existe maestro, retorna ([], []).
+    Devuelve (hojas_list, hojas_columnas_map).
+    - hojas_list: lista de nombres de hoja del archivo maestro (ordenada).
+    - hojas_columnas_map: dict { hoja_nombre: [col1, col2, ...] } con las columnas
+      detectadas en cada hoja (intenta leer solo los encabezados).
+    - Si el archivo no existe o ocurre un error, retorna ([], {}).
     """
     maestro_path = maestro_path or MAESTRO_FILE
     if not os.path.exists(maestro_path):
-        return [], []
+        return [], {}
 
     try:
         xl = pd.ExcelFile(maestro_path, engine="openpyxl")
         hojas = xl.sheet_names or []
-        # preferir 'General' si existe
-        target = "General" if "General" in hojas else (hojas[0] if hojas else None)
-        columnas = []
-        if target:
-            df = xl.parse(target, nrows=0)  # solo encabezados
-            columnas = list(df.columns)
-        return hojas, columnas
+        hojas_columnas_map: Dict[str, List[str]] = {}
+
+        for hoja in hojas:
+            try:
+                # Leer solo encabezado (nrows=0) para obtener columnas
+                df_head = xl.parse(hoja, nrows=0)
+                hojas_columnas_map[hoja] = list(df_head.columns)
+            except Exception:
+                hojas_columnas_map[hoja] = []
+
+        return hojas, hojas_columnas_map
+
     except Exception:
-        return [], []
-
-
+        return [], {}
 # =============================
 # Rutas principales
 # =============================
@@ -316,45 +318,56 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload():
     """
-    Subida de un archivo.
-    - Guarda archivo en UPLOAD_FOLDER.
-    - Registra metadatos en archivos.json.
+    Subida de uno o varios archivos.
+    - Soporta input name="archivo" (único) y name="files" (múltiples).
+    - Normaliza y guarda metadatos en ARCHIVOS_JSON asegurando que existan
+      tanto 'tipo' como 'tipo_insumo' para compatibilidad con templates.
     """
-    # esperamos un input file con name="archivo" (no "files")
-    file = request.files.get("archivo")
-    if not file or file.filename.strip() == "":
-        flash("⚠️ No se seleccionó ningún archivo.", "error")
+    # obtener lista de archivos (soporta ambos casos)
+    files = []
+    # caso: formulario con input file name="archivo" (single-file)
+    single = request.files.get("archivo")
+    if single and single.filename and single.filename.strip():
+        files = [single]
+    else:
+        # caso: formulario multi-file name="files"
+        files = request.files.getlist("files") or []
+
+    if not files:
+        flash("⚠️ No se enviaron archivos", "error")
         return redirect(url_for("index"))
 
-    # Tipo viene del select name="tipo" en el form
-    tipo_insumo = request.form.get("tipo") or request.form.get("tipo_insumo") or "desconocido"
+    archivos = cargar_json(ARCHIVOS_JSON, [])
+    if not isinstance(archivos, list):
+        archivos = []
 
-    try:
+    tipo_insumo_from_form = request.form.get("tipo") or request.form.get("tipo_insumo") or "desconocido"
+
+    for file in files:
+        if not file or not getattr(file, "filename", "").strip():
+            continue
+
+        # Normalizar nombre y guardar
         filename = secure_filename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        archivos = cargar_json(ARCHIVOS_JSON, [])
-        if not isinstance(archivos, list):
-            archivos = []
-
+        # Guardar ambos keys para compatibilidad con diferentes templates
         nuevo_archivo = {
             "nombre": filename,
-            "tipo": tipo_insumo,
+            "tipo": tipo_insumo_from_form,
+            "tipo_insumo": tipo_insumo_from_form,
             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "ruta": filepath,
             "cargado": True
         }
         archivos.append(nuevo_archivo)
-        guardar_json(ARCHIVOS_JSON, archivos)
 
-        registrar_evento("Subida de archivo", f"{filename} como {tipo_insumo}")
-        flash("✅ Archivo subido correctamente", "success")
+        # Registrar en historial
+        registrar_evento("Subida de archivo", f"{filename} como {tipo_insumo_from_form}")
 
-    except Exception as e:
-        flash(f"❌ Error al subir archivo: {e}", "error")
-        registrar_evento("Error", f"Fallo al subir archivo: {e}")
-
+    guardar_json(ARCHIVOS_JSON, archivos)
+    flash("✅ Archivos subidos correctamente", "success")
     return redirect(url_for("index"))
 
 @app.route("/eliminar/<nombre_archivo>", methods=["POST", "GET"])
@@ -385,16 +398,20 @@ def eliminar(nombre_archivo):
     return redirect(url_for("index"))
 
 
-# =============================
-# Integración de insumos en el Maestro
-# =============================
-@app.route("/integrar", methods=["POST"], endpoint="integrar")
+@app.route("/integrar", methods=["POST"])
 def integrar():
     """
     Integra un archivo subido dentro del Maestro según el tipo de insumo.
+    Lógica robusta:
+      - acepta campos filename / archivo / file como nombre de archivo a integrar
+      - acepta tipo_insumo o tipo (según el form)
+      - intenta mapear el tipo a una hoja existente (comparación robusta)
+      - para 'personal' llama integrate_personnel_to_estado(MAESTRO_FILE, filepath, operacion=...)
+      - para otras hojas usa replace_sheet_with_df con keep_rows configurado por hoja
     """
+    # Aceptar varios nombres de campo posibles desde el form
     filename = request.form.get("filename") or request.form.get("archivo") or request.form.get("file")
-    tipo_insumo = request.form.get("tipo_insumo") or request.form.get("tipo") or ""
+    tipo_insumo = (request.form.get("tipo_insumo") or request.form.get("tipo") or "").strip()
 
     if not filename:
         flash("⚠️ Debe seleccionar un archivo para integrar.", "error")
@@ -406,60 +423,161 @@ def integrar():
         return redirect(url_for("index"))
 
     try:
-        # Cargar insumo como DataFrame
-        df_insumo = pd.read_excel(filepath, engine="openpyxl")
+        # Leer insumo (si hace falta)
+        # Nota: para personal pasamos la ruta al método incremental (no usar el DataFrame aquí)
+        df_insumo = None
+        if not tipo_insumo.lower().startswith("personal"):
+            # solo cargar cuando lo necesitaremos como DataFrame
+            try:
+                df_insumo = pd.read_excel(filepath, engine="openpyxl")
+            except Exception as e:
+                # si no puede leerse con pandas, reportar
+                raise RuntimeError(f"Error leyendo el insumo con pandas: {e}")
 
         # Caso 1: Definir Maestro inicial (sobrescribe todo)
         if tipo_insumo == "maestro":
+            # sobrescribir completamente el archivo maestro
+            if df_insumo is None:
+                df_insumo = pd.read_excel(filepath, engine="openpyxl")
             df_insumo.to_excel(MAESTRO_FILE, index=False, engine="openpyxl")
             registrar_evento("Integración", f"Se estableció {filename} como Maestro")
             flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
             return redirect(url_for("index"))
 
-        # Caso 2: Integrar en Maestro existente
+        # Asegurar existencia del maestro
         if not os.path.exists(MAESTRO_FILE):
             flash("⚠️ No existe maestro para integrar.", "error")
             return redirect(url_for("index"))
 
-        # Integraciones específicas por tipo de insumo
-        # -> siempre pasamos MAESTRO_FILE (ruta string) a las utilidades
-        if tipo_insumo == "general":
-            # Reemplaza hoja General por df_insumo respetando fórmulas
-            replace_sheet_with_df(MAESTRO_FILE, "General", df_insumo)
+        # Obtener hojas disponibles y mapa de columnas
+        hojas, hojas_columnas_map = get_maestro_sheets_and_columns(MAESTRO_FILE)
+        hojas_set = hojas or []
 
-        elif tipo_insumo in ("personal_ingresos", "personal_retiros", "personal_actualizacion"):
-            # integrate_personnel_to_estado espera (master_path, personnel_path, ...)
-            # le pasamos la ruta del archivo subido (filepath)
-            integrate_personnel_to_estado(MAESTRO_FILE, filepath, operacion=tipo_insumo)
+        # Helper: normalizar texto para matching robusto
+        def _norm_key(s):
+            if not s:
+                return ""
+            return re.sub(r'[^a-z0-9]', '', str(s).lower())
 
-        else:
-            # para otros insumos intentamos mapear a nombre de hoja
-            hoja_destino = tipo_insumo.capitalize()
-            replace_sheet_with_df(MAESTRO_FILE, hoja_destino, df_insumo)
+        # Intentar encontrar la hoja destino de forma flexible
+        def _find_matching_sheet(candidate: str, filename_hint: str = ""):
+            cand = _norm_key(candidate)
+            # mapa normalizado -> original
+            map_norm = { _norm_key(h): h for h in hojas_set }
+            if cand in map_norm:
+                return map_norm[cand]
+            # tratar candidato vacío: intentar con filename hint
+            if not cand and filename_hint:
+                cand = _norm_key(filename_hint)
+                if cand in map_norm:
+                    return map_norm[cand]
+            # keywords heurísticos
+            keywords = {
+                "antivirus": ["antivirus", "endpoint", "enpoint"],
+                "estado": ["estado", "usuario", "personal", "colaborador", "cedula"],
+                "useraranda_blogik": ["aranda", "useraranda", "blogik"],
+                "reporte_da": ["da", "reporte", "reporte da"],
+                "general": ["general"]
+            }
+            for target, keys in keywords.items():
+                for k in keys:
+                    if k in cand or k in _norm_key(filename_hint):
+                        # buscar hoja que contenga la keyword k
+                        for h in hojas_set:
+                            if k in _norm_key(h):
+                                return h
+                        # mapeo directo si existe
+                        mapping = {
+                            "antivirus": "Antivirus",
+                            "estado": "ESTADO_GEN_USUARIO",
+                            "useraranda_blogik": "Useraranda_BLOGIK",
+                            "reporte_da": "Reporte DA",
+                            "general": "General"
+                        }
+                        mapped = mapping.get(target)
+                        if mapped and mapped in hojas_set:
+                            return mapped
+            # último recurso: buscar substring en cualquier hoja
+            for h in hojas_set:
+                if _norm_key(cand) and (_norm_key(cand) in _norm_key(h) or _norm_key(h) in _norm_key(cand)):
+                    return h
+            return None
 
-        # Aplicar validaciones dinámicas (si existen)
+        # Si es personal -> ruta incremental (no reemplazamos hoja entera)
+        if tipo_insumo.lower().startswith("personal") or tipo_insumo.lower().startswith("personal_"):
+            # deducir operacion: ingresos / retiros / mixto
+            oper = "mixto"
+            low = tipo_insumo.lower()
+            if "ingres" in low:
+                oper = "ingresos"
+            elif "retiro" in low or "retiros" in low or "termin" in low:
+                oper = "retiros"
+
+            resumen = integrate_personnel_to_estado(
+                master_path=MAESTRO_FILE,
+                personnel_path=filepath,
+                operacion=oper,
+                make_backup=True
+            )
+            registrar_evento("Integración", f"{filename} integrado como {tipo_insumo} (personal) -> {resumen}")
+            flash(f"✅ Personal integrado: {resumen}", "success")
+            return redirect(url_for("index"))
+
+        # Para el resto: buscar hoja destino
+        hoja_dest = _find_matching_sheet(tipo_insumo, filename)
+        if not hoja_dest:
+            # si no encontramos, informar y listar opciones disponibles
+            texto = (
+                f"La hoja destino para '{tipo_insumo or filename}' no fue encontrada en el Maestro. "
+                f"Hojas disponibles: {', '.join(hojas_set) if hojas_set else 'ninguna'}"
+            )
+            flash(f"❌ {texto}", "error")
+            registrar_evento("Error", texto)
+            return redirect(url_for("index"))
+
+        # Determinar keep_rows por hoja (para no borrar la "fila plantilla" de fórmulas)
+        default_keep = {
+            "ESTADO_GEN_USUARIO": 2,
+            "Antivirus": 2,
+            "Useraranda_BLOGIK": 2,
+            "Reporte DA": 2,
+            "General": 1
+        }
+        keep_rows = default_keep.get(hoja_dest, 2)
+
+        # Reemplazar hoja con DataFrame (replace_sheet_with_df espera ruta maestro y df)
+        try:
+            res = replace_sheet_with_df(MAESTRO_FILE, hoja_dest, df_insumo, keep_rows=keep_rows)
+            registrar_evento("Integración", f"{filename} integrado en hoja {hoja_dest} ({res.get('rows_written')} filas).")
+            flash(f"✅ Archivo {filename} integrado en hoja '{hoja_dest}'.", "success")
+        except ValueError as e:
+            # hoja no existe o error específico
+            flash(f"❌ Error al integrar: {e}", "error")
+            registrar_evento("Error", f"Fallo integrando {filename}: {e}")
+        except Exception as e:
+            flash(f"❌ Error inesperado al integrar: {e}", "error")
+            registrar_evento("Error", f"Fallo integrando {filename}: {e}")
+
+        # Aplicar validaciones dinámicas (opcional, si existen reglas)
         try:
             config_data = cargar_json(CONFIG_JSON, {})
             reglas = config_data.get("validaciones", []) or []
-            if reglas:
+            if reglas and "General" in hojas_set:
                 xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
-                if "General" in xl.sheet_names:
-                    df_general = xl.parse("General")
-                    df_general = aplicar_reglas(df_general, reglas)
-                    with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                        df_general.to_excel(writer, sheet_name="General", index=False)
+                df_general = xl.parse("General")
+                df_general = aplicar_reglas(df_general, reglas)
+                with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                    df_general.to_excel(writer, sheet_name="General", index=False)
         except Exception as e:
             flash(f"⚠️ Error aplicando validaciones dinámicas: {e}", "warning")
 
         registrar_evento("Integración", f"{filename} integrado como {tipo_insumo}")
-        flash(f"✅ Archivo {filename} integrado como {tipo_insumo}.", "success")
+        return redirect(url_for("index"))
 
     except Exception as e:
         flash(f"❌ Error al integrar {filename}: {str(e)}", "error")
         registrar_evento("Error", f"Fallo al integrar {filename}: {e}")
-
-    return redirect(url_for("index"))
-    
+        return redirect(url_for("index"))    
 # =============================
 # Aplicar validaciones al Maestro
 # =============================

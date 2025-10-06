@@ -150,5 +150,35 @@
         "fecha": "2025-10-05 19:45:32",
         "evento": "Error",
         "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 20:11:29",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja '' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 20:11:50",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Oct09Reporte-Data_Inventariodeprueba.xlsx: La hoja '' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 20:12:09",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja '' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 20:12:14",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Oct09Reporte-Data_Inventariodeprueba.xlsx: La hoja '' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 20:14:08",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja '' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-06 07:29:21",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: name 're' is not defined"
     }
 ]

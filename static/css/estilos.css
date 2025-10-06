@@ -429,3 +429,14 @@ tr:hover {
         justify-content: flex-end;
     }
 }
+
+/* ==============================
+   Campos de solo lectura
+============================== */
+.input-readonly {
+    background: #f0f0f0;
+    color: #555;
+    border: 1px solid #ccc;
+    padding: 6px;
+    border-radius: var(--radio-borde);
+}
