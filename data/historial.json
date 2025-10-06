@@ -70,5 +70,80 @@
         "fecha": "2025-09-29 19:31:01",
         "evento": "Error",
         "detalle": "Fallo al integrar tmpArandira.xlsx: La hoja 'Aranda' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-01 16:37:50",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo tmpArandira.xlsx"
+    },
+    {
+        "fecha": "2025-10-01 16:37:55",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo Enpoint antivirus.xlsx"
+    },
+    {
+        "fecha": "2025-10-01 16:38:01",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo Oct09Reporte-Data_Inventariodeprueba.xlsx"
+    },
+    {
+        "fecha": "2025-10-02 06:30:26",
+        "evento": "Subida de archivo",
+        "detalle": "Oct09Reporte-Data_Inventariodeprueba.xlsx como maestro"
+    },
+    {
+        "fecha": "2025-10-05 18:16:03",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo Oct09Reporte-Data_Inventariodeprueba.xlsx"
+    },
+    {
+        "fecha": "2025-10-05 18:16:25",
+        "evento": "Subida de archivo",
+        "detalle": "Oct09Reporte-Data_Inventariodeprueba.xlsx como maestro"
+    },
+    {
+        "fecha": "2025-10-05 18:16:45",
+        "evento": "Subida de archivo",
+        "detalle": "Enpoint_antivirus.xlsx como antivirus"
+    },
+    {
+        "fecha": "2025-10-05 18:16:57",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 18:25:47",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo Enpoint_antivirus.xlsx"
+    },
+    {
+        "fecha": "2025-10-05 18:26:11",
+        "evento": "Subida de archivo",
+        "detalle": "Enpoint_antivirus.xlsx como antivirus"
+    },
+    {
+        "fecha": "2025-10-05 18:26:15",
+        "evento": "Integración",
+        "detalle": "Se estableció Oct09Reporte-Data_Inventariodeprueba.xlsx como Maestro"
+    },
+    {
+        "fecha": "2025-10-05 18:26:23",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 18:31:05",
+        "evento": "Eliminación",
+        "detalle": "Se eliminó el archivo Enpoint_antivirus.xlsx"
+    },
+    {
+        "fecha": "2025-10-05 18:31:29",
+        "evento": "Subida de archivo",
+        "detalle": "Enpoint_antivirus.xlsx como antivirus"
+    },
+    {
+        "fecha": "2025-10-05 18:31:33",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
     }
 ]

@@ -276,21 +276,17 @@ def index():
 
     # Obtener hojas y columnas (si existe maestro)
     try:
-        from xlsx_utils import get_maestro_sheets_and_columns
-        hojas_disponibles, hojas_columnas_map = get_maestro_sheets_and_columns(MAESTRO_FILE)
-        columnas_disponibles = hojas_columnas_map.get("General") or next(
-            (cols for cols in hojas_columnas_map.values() if cols), []
-        )
+        hojas_disponibles, columnas_disponibles = get_maestro_sheets_and_columns(MAESTRO_FILE)
     except Exception:
-        hojas_disponibles, hojas_columnas_map, columnas_disponibles = [], {}, []
+        hojas_disponibles, columnas_disponibles = [], []
 
     return render_template(
         "index.html",
         archivos=archivos,
         hojas_disponibles=hojas_disponibles,
         columnas_disponibles=columnas_disponibles,
-        hojas_columnas_map=hojas_columnas_map
     )
+
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -300,11 +296,11 @@ def upload():
     - Registra metadatos en archivos.json.
     - Registra evento en historial.json.
     """
-    if "files" not in request.files:
+    if "archivo" not in request.files:
         flash("⚠️ No se enviaron archivos", "error")
         return redirect(url_for("index"))
 
-    files = request.files.getlist("files")
+    files = request.files.getlist("archivo")
     if not files:
         flash("⚠️ No se seleccionaron archivos", "error")
         return redirect(url_for("index"))
@@ -322,7 +318,7 @@ def upload():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        tipo_insumo = request.form.get("tipo_insumo", "desconocido")
+        tipo_insumo = request.form.get("tipo", "desconocido")  # 👈 corregido
 
         # Registrar en archivos.json
         nuevo_archivo = {
@@ -340,6 +336,7 @@ def upload():
     guardar_json(ARCHIVOS_JSON, archivos)
     flash("✅ Archivos subidos correctamente", "success")
     return redirect(url_for("index"))
+
 
 @app.route("/eliminar/<nombre_archivo>", methods=["POST", "GET"])
 def eliminar(nombre_archivo):
@@ -372,7 +369,7 @@ def eliminar(nombre_archivo):
 # =============================
 # Integración de insumos en el Maestro
 # =============================
-@app.route("/integrar", methods=["POST"])
+@app.route("/integrar", methods=["POST"], endpoint="integrar")  # 👈 endpoint forzado
 def integrar():
     """
     Integra un archivo subido dentro del Maestro según el tipo de insumo.
@@ -421,7 +418,6 @@ def integrar():
             config_data = cargar_json(CONFIG_JSON, {})
             reglas = config_data.get("validaciones", [])
             if reglas:
-                # Aplicar validaciones directamente en hoja General
                 xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
                 if "General" in xl.sheet_names:
                     df_general = xl.parse("General")

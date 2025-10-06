@@ -1,20 +1,16 @@
 [
-  {
-    "nombre": "Oct09Reporte-Data_Inventariodeprueba.xlsx",
-    "fecha": "2025-08-26 22:42:00",
-    "tipo": "maestro",
-    "cargado": true
-  },
-  {
-    "nombre": "Enpoint antivirus.xlsx",
-    "fecha": "2025-08-26 22:43:05",
-    "tipo": "antivirus",
-    "cargado": true
-  },
-  {
-    "nombre": "tmpArandira.xlsx",
-    "fecha": "2025-08-26 23:21:06",
-    "tipo": "Aranda",
-    "cargado": true
-  }
+    {
+        "nombre": "Oct09Reporte-Data_Inventariodeprueba.xlsx",
+        "fecha": "2025-10-05 18:16:25",
+        "tipo_insumo": "maestro",
+        "cargado": true,
+        "ruta": "C:\\Users\\Usuario\\source\\repos\\auditoria_app\\uploads\\Oct09Reporte-Data_Inventariodeprueba.xlsx"
+    },
+    {
+        "nombre": "Enpoint_antivirus.xlsx",
+        "fecha": "2025-10-05 18:31:29",
+        "tipo_insumo": "antivirus",
+        "cargado": true,
+        "ruta": "C:\\Users\\Usuario\\source\\repos\\auditoria_app\\uploads\\Enpoint_antivirus.xlsx"
+    }
 ]

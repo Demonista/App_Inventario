@@ -55,19 +55,19 @@
             {% for archivo in archivos %}
             <tr>
                 <td>{{ archivo.nombre }}</td>
-                <td>{{ archivo.tipo }}</td>
+                <td>{{ archivo.tipo_insumo }}</td> <!-- 👈 corregido -->
                 <td>{{ archivo.fecha }}</td>
                 <td>
                     <div class="acciones-botones">
                         <!-- Integrar -->
                         <form action="{{ url_for('integrar') }}" method="POST" class="accion-form">
                             <input type="hidden" name="filename" value="{{ archivo.nombre }}">
-                            <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo }}">
+                            <input type="hidden" name="tipo_insumo" value="{{ archivo.tipo_insumo }}">
                             <button type="submit" class="btn morado btn-small">🔗 Integrar</button>
                         </form>
 
                         <!-- Descargar Maestro (solo si el archivo es el insumo 1) -->
-                        {% if archivo.tipo == "maestro" %}
+                        {% if archivo.tipo_insumo == "maestro" %}
                             <a href="{{ url_for('download_maestro') }}" class="btn azul btn-small">⬇ Maestro</a>
                         {% endif %}
 
@@ -99,15 +99,12 @@
         📤 Exportar Excel
     </a>
 
-    <!-- Exportar PDF con opciones -->
-    <!--<div class="btn-group">-->
-        <button type="button" class="btn rojo btn-small" onclick="exportarPDF(true)">
-            📄 Exportar PDF (Todo)
-        </button>
-        <button type="button" class="btn gris btn-small" onclick="exportarPDF(false)">
-            📄 Exportar PDF (30 filas)
-        </button>
-    <!--</div>-->
+    <button type="button" class="btn rojo btn-small" onclick="exportarPDF(true)">
+        📄 Exportar PDF (Todo)
+    </button>
+    <button type="button" class="btn gris btn-small" onclick="exportarPDF(false)">
+        📄 Exportar PDF (30 filas)
+    </button>
 
     <!-- Botón para aplicar validaciones -->
     <form action="{{ url_for('aplicar_validaciones') }}" method="post" style="display:inline;">
@@ -121,14 +118,9 @@
      Variables dinámicas para JS
 ============================== -->
 <script type="text/javascript">
-  window.hojasColumnas = {{ hojas_columnas_map | tojson | safe }};
-  window.columnasDisponibles = {{ columnas_disponibles | tojson | safe }};
-</script>
-
-<script>
-  // Hojas y columnas obtenidas dinámicamente desde Flask
   window.hojasDisponibles = {{ hojas_disponibles | tojson }};
   window.columnasDisponibles = {{ columnas_disponibles | tojson }};
 </script>
 
 {% endblock %}
+
