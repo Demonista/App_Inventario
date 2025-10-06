@@ -145,5 +145,10 @@
         "fecha": "2025-10-05 18:31:33",
         "evento": "Error",
         "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
+    },
+    {
+        "fecha": "2025-10-05 19:45:32",
+        "evento": "Error",
+        "detalle": "Fallo al integrar Enpoint_antivirus.xlsx: La hoja 'Antivirus' no existe en el maestro."
     }
 ]

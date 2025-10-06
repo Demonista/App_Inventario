@@ -270,73 +270,92 @@ def index():
     - Carga listado de archivos subidos desde archivos.json.
     - Pasa info de hojas/columnas del maestro para JS (si existe).
     """
-    archivos = cargar_json(ARCHIVOS_JSON, [])
-    if not isinstance(archivos, list):
-        archivos = []
+    archivos_raw = cargar_json(ARCHIVOS_JSON, [])
+    if not isinstance(archivos_raw, list):
+        archivos_raw = []
+
+    # Normalizar estructura de cada registro para que las plantillas siempre
+    # encuentren las keys: nombre, tipo, fecha, ruta
+    archivos = []
+    for a in archivos_raw:
+        if not isinstance(a, dict):
+            continue
+        nombre = a.get("nombre") or a.get("filename") or a.get("file") or ""
+        # permitir tanto 'tipo' como 'tipo_insumo'
+        tipo = a.get("tipo") or a.get("tipo_insumo") or a.get("type") or ""
+        fecha = a.get("fecha") or a.get("date") or ""
+        ruta = a.get("ruta") or a.get("path") or a.get("filepath") or ""
+        archivos.append({
+            "nombre": nombre,
+            "tipo": tipo,
+            "fecha": fecha,
+            "ruta": ruta
+        })
 
     # Obtener hojas y columnas (si existe maestro)
     try:
-        hojas_disponibles, columnas_disponibles = get_maestro_sheets_and_columns(MAESTRO_FILE)
+        from xlsx_utils import get_maestro_sheets_and_columns
+        hojas_disponibles, hojas_columnas_map = get_maestro_sheets_and_columns(MAESTRO_FILE)
+        # columnas por defecto: preferir "General", si no la primera hoja con columnas
+        columnas_disponibles = []
+        if hojas_columnas_map:
+            columnas_disponibles = hojas_columnas_map.get("General") or next(
+                (cols for cols in hojas_columnas_map.values() if cols), []
+            )
     except Exception:
-        hojas_disponibles, columnas_disponibles = [], []
+        hojas_disponibles, hojas_columnas_map, columnas_disponibles = [], {}, []
 
     return render_template(
         "index.html",
         archivos=archivos,
         hojas_disponibles=hojas_disponibles,
         columnas_disponibles=columnas_disponibles,
+        hojas_columnas_map=hojas_columnas_map
     )
-
 
 @app.route("/upload", methods=["POST"])
 def upload():
     """
-    Subida de uno o varios archivos.
-    - Guarda archivos en UPLOAD_FOLDER.
+    Subida de un archivo.
+    - Guarda archivo en UPLOAD_FOLDER.
     - Registra metadatos en archivos.json.
-    - Registra evento en historial.json.
     """
-    if "archivo" not in request.files:
-        flash("⚠️ No se enviaron archivos", "error")
+    # esperamos un input file con name="archivo" (no "files")
+    file = request.files.get("archivo")
+    if not file or file.filename.strip() == "":
+        flash("⚠️ No se seleccionó ningún archivo.", "error")
         return redirect(url_for("index"))
 
-    files = request.files.getlist("archivo")
-    if not files:
-        flash("⚠️ No se seleccionaron archivos", "error")
-        return redirect(url_for("index"))
+    # Tipo viene del select name="tipo" en el form
+    tipo_insumo = request.form.get("tipo") or request.form.get("tipo_insumo") or "desconocido"
 
-    archivos = cargar_json(ARCHIVOS_JSON, [])
-    if not isinstance(archivos, list):
-        archivos = []
-
-    for file in files:
-        if not file or file.filename.strip() == "":
-            continue
-
-        # Normalizar nombre y guardar
+    try:
         filename = secure_filename(file.filename)
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        tipo_insumo = request.form.get("tipo", "desconocido")  # 👈 corregido
+        archivos = cargar_json(ARCHIVOS_JSON, [])
+        if not isinstance(archivos, list):
+            archivos = []
 
-        # Registrar en archivos.json
         nuevo_archivo = {
             "nombre": filename,
+            "tipo": tipo_insumo,
             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "tipo_insumo": tipo_insumo,
-            "cargado": True,
-            "ruta": filepath
+            "ruta": filepath,
+            "cargado": True
         }
         archivos.append(nuevo_archivo)
+        guardar_json(ARCHIVOS_JSON, archivos)
 
-        # Registrar en historial.json
         registrar_evento("Subida de archivo", f"{filename} como {tipo_insumo}")
+        flash("✅ Archivo subido correctamente", "success")
 
-    guardar_json(ARCHIVOS_JSON, archivos)
-    flash("✅ Archivos subidos correctamente", "success")
+    except Exception as e:
+        flash(f"❌ Error al subir archivo: {e}", "error")
+        registrar_evento("Error", f"Fallo al subir archivo: {e}")
+
     return redirect(url_for("index"))
-
 
 @app.route("/eliminar/<nombre_archivo>", methods=["POST", "GET"])
 def eliminar(nombre_archivo):
@@ -369,13 +388,13 @@ def eliminar(nombre_archivo):
 # =============================
 # Integración de insumos en el Maestro
 # =============================
-@app.route("/integrar", methods=["POST"], endpoint="integrar")  # 👈 endpoint forzado
+@app.route("/integrar", methods=["POST"], endpoint="integrar")
 def integrar():
     """
     Integra un archivo subido dentro del Maestro según el tipo de insumo.
     """
-    filename = request.form.get("filename")
-    tipo_insumo = request.form.get("tipo_insumo")
+    filename = request.form.get("filename") or request.form.get("archivo") or request.form.get("file")
+    tipo_insumo = request.form.get("tipo_insumo") or request.form.get("tipo") or ""
 
     if not filename:
         flash("⚠️ Debe seleccionar un archivo para integrar.", "error")
@@ -390,11 +409,11 @@ def integrar():
         # Cargar insumo como DataFrame
         df_insumo = pd.read_excel(filepath, engine="openpyxl")
 
-        # Caso 1: Definir Maestro inicial
+        # Caso 1: Definir Maestro inicial (sobrescribe todo)
         if tipo_insumo == "maestro":
             df_insumo.to_excel(MAESTRO_FILE, index=False, engine="openpyxl")
-            flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
             registrar_evento("Integración", f"Se estableció {filename} como Maestro")
+            flash(f"✅ El archivo {filename} se estableció como Maestro.", "success")
             return redirect(url_for("index"))
 
         # Caso 2: Integrar en Maestro existente
@@ -403,27 +422,31 @@ def integrar():
             return redirect(url_for("index"))
 
         # Integraciones específicas por tipo de insumo
+        # -> siempre pasamos MAESTRO_FILE (ruta string) a las utilidades
         if tipo_insumo == "general":
+            # Reemplaza hoja General por df_insumo respetando fórmulas
             replace_sheet_with_df(MAESTRO_FILE, "General", df_insumo)
 
         elif tipo_insumo in ("personal_ingresos", "personal_retiros", "personal_actualizacion"):
-            integrate_personnel_to_estado(MAESTRO_FILE, filepath, tipo_insumo)
+            # integrate_personnel_to_estado espera (master_path, personnel_path, ...)
+            # le pasamos la ruta del archivo subido (filepath)
+            integrate_personnel_to_estado(MAESTRO_FILE, filepath, operacion=tipo_insumo)
 
         else:
+            # para otros insumos intentamos mapear a nombre de hoja
             hoja_destino = tipo_insumo.capitalize()
             replace_sheet_with_df(MAESTRO_FILE, hoja_destino, df_insumo)
 
-        # Aplicar validaciones dinámicas
+        # Aplicar validaciones dinámicas (si existen)
         try:
             config_data = cargar_json(CONFIG_JSON, {})
-            reglas = config_data.get("validaciones", [])
+            reglas = config_data.get("validaciones", []) or []
             if reglas:
                 xl = pd.ExcelFile(MAESTRO_FILE, engine="openpyxl")
                 if "General" in xl.sheet_names:
                     df_general = xl.parse("General")
                     df_general = aplicar_reglas(df_general, reglas)
-                    with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl",
-                                        mode="a", if_sheet_exists="replace") as writer:
+                    with pd.ExcelWriter(MAESTRO_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
                         df_general.to_excel(writer, sheet_name="General", index=False)
         except Exception as e:
             flash(f"⚠️ Error aplicando validaciones dinámicas: {e}", "warning")
@@ -436,7 +459,7 @@ def integrar():
         registrar_evento("Error", f"Fallo al integrar {filename}: {e}")
 
     return redirect(url_for("index"))
-
+    
 # =============================
 # Aplicar validaciones al Maestro
 # =============================
